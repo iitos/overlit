@@ -8,6 +8,6 @@ build:
 	@echo "## build overlit"
 	@go build -ldflags "-extldflags=-Wl,--allow-multiple-definition" .
 
-ensure:
-	@echo "## ensure dep"
-	@dep ensure
+getall:
+	@echo "## get all dependencies"
+	@go get -d .

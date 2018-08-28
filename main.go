@@ -2,7 +2,6 @@ package main
 
 import (
 	graphhelper "github.com/docker/go-plugins-helpers/graphdriver"
-	overlitdriver "github.com/iitos/overlit/driver"
 )
 
 const (
@@ -10,7 +9,7 @@ const (
 )
 
 func main() {
-	d, _ := overlitdriver.NewOverlitDriver()
+	d, _ := newOverlitDriver()
 	h := graphhelper.NewHandler(d)
 	h.ServeUnix(sockAddr, 0)
 }
