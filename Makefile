@@ -7,3 +7,7 @@ clean:
 build:
 	@echo "## build overlit"
 	@go build -ldflags "-extldflags=-Wl,--allow-multiple-definition" .
+
+ensure:
+	@echo "## ensure dep"
+	@dep ensure
