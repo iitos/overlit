@@ -55,12 +55,6 @@ type overlitDriver struct {
 	locker *locker.Locker
 }
 
-func newOverlitDriver() (*overlitDriver, error) {
-	d := &overlitDriver{}
-
-	return d, nil
-}
-
 func parseOptions(options []string) (*overlitOptions, error) {
 	opts := &overlitOptions{}
 	for _, opt := range options {
@@ -532,4 +526,10 @@ func (d *overlitDriver) Capabilities() graphdriver.Capabilities {
 	log.Printf("OVERLIT: Capabilities\n")
 
 	return graphdriver.Capabilities{}
+}
+
+func NewOverlitDriver() (*overlitDriver, error) {
+	d := &overlitDriver{}
+
+	return d, nil
 }
