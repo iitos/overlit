@@ -113,14 +113,6 @@
   version = "v1.1.1"
 
 [[projects]]
-  branch = "master"
-  digest = "1:919d71fe67c9757c482fbdb663d5b9730b0b9f9eaaf845b96e31e7319f1beef7"
-  name = "github.com/iitos/overlit"
-  packages = ["driver"]
-  pruneopts = "UT"
-  revision = "76d2f78f08d60e23859963b6dfd5abed983a9c89"
-
-[[projects]]
   digest = "1:ee4d4af67d93cc7644157882329023ce9a7bcfce956a079069a9405521c7cc8d"
   name = "github.com/opencontainers/go-digest"
   packages = ["."]
@@ -216,14 +208,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:0dafafed83f125cdc945a014b2dec15e5b5d8cd2d77a2d1e3763120b08ab381b"
+  digest = "1:9c99029818a3d4f53bcfd6c0158ca068aeacfecb29283f82a1f9c79b8d2a7da4"
   name = "golang.org/x/sys"
   packages = [
     "unix",
     "windows",
   ]
   pruneopts = "UT"
-  revision = "4910a1d54f876d7b22162a85f4d066d3ee649450"
+  revision = "d99a578cf41bfccdeaf48b0845c823a4b8b0ad5e"
 
 [solve-meta]
   analyzer-name = "dep"
@@ -240,7 +232,6 @@
     "github.com/docker/docker/pkg/reexec",
     "github.com/docker/docker/pkg/system",
     "github.com/docker/go-plugins-helpers/graphdriver",
-    "github.com/iitos/overlit/driver",
     "github.com/opencontainers/runc/libcontainer/system",
     "github.com/opencontainers/selinux/go-selinux/label",
     "github.com/sirupsen/logrus",
