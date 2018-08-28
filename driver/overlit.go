@@ -163,7 +163,7 @@ func (d *overlitDriver) isParent(id, parent string) bool {
 	return ld == parentDir
 }
 
-func (d *overlitDriver) create(id, parent string, size int64, fstype string) (retErr error) {
+func (d *overlitDriver) create(id, parent string) (retErr error) {
 	dir := d.dir(id)
 
 	rootUID, rootGID, err := idtools.GetRootUIDGID(d.uidMaps, d.gidMaps)
@@ -180,12 +180,6 @@ func (d *overlitDriver) create(id, parent string, size int64, fstype string) (re
 	}
 
 	lid := generateID(idLength)
-
-	if size > 0 {
-		exec.Command("lvcreate", "-n", lid, "-L", fmt.Sprintf("%dG", size), "dockers").Run()
-		exec.Command("fsys.py", "-c", "mkfs", "-f", fstype, "-d", "/dev/dockers/"+lid, "-r", "--force", "--nolazy").Run()
-		exec.Command("fsys.py", "-c", "mount", "-f", fstype, "-d", "/dev/dockers/"+lid, "-t", dir, "-r").Run()
-	}
 
 	defer func() {
 		if retErr != nil {
@@ -256,10 +250,7 @@ func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []i
 func (d *overlitDriver) Create(id, parent, mountLabel string, storageOpt map[string]string) error {
 	log.Printf("OVERLIT: Create (id = %s, parent = %s, mountLabel = %s)\n", id, parent, mountLabel)
 
-	size, _ := strconv.ParseInt(os.Getenv("OVERLIT_ROSIZE"), 10, 64)
-	fstype := os.Getenv("OVERLIT_ROFS")
-
-	return d.create(id, parent, size, fstype)
+	return d.create(id, parent)
 }
 
 func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOpt map[string]string) error {
@@ -272,10 +263,7 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 		}
 	}
 
-	size, _ := strconv.ParseInt(os.Getenv("OVERLIT_RWSIZE"), 10, 64)
-	fstype := os.Getenv("OVERLIT_RWFS")
-
-	return d.create(id, parent, size, fstype)
+	return d.create(id, parent)
 }
 
 func (d *overlitDriver) Remove(id string) error {
@@ -529,6 +517,8 @@ func (d *overlitDriver) Capabilities() graphdriver.Capabilities {
 }
 
 func NewOverlitDriver() (*overlitDriver, error) {
+	log.Printf("OVERLIT: CreateDriver ()\n")
+
 	d := &overlitDriver{}
 
 	return d, nil
