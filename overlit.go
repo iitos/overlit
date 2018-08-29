@@ -515,7 +515,7 @@ func (d *overlitDriver) Capabilities() graphdriver.Capabilities {
 func newOverlitDriver(options []string) (*overlitDriver, error) {
 	log.Printf("overlit: createDriver ()\n")
 
-	if err := checkLVMReady(); err != nil {
+	if err := checkLVMAvailable(); err != nil {
 		return nil, errors.Wrap(err, "lvm is not ready")
 	}
 
