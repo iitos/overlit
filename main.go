@@ -15,15 +15,18 @@ const (
 
 func main() {
 	var devname string
+	var groupname string
+	var extentsize int
 
-	flag.StringVar(&devname, "devname", "", "devmapper device name")
+	flag.StringVar(&devname, "devname", "_", "devmapper device name")
+	flag.StringVar(&groupname, "groupname", "docker", "devmapper group name")
+	flag.IntVar(&extentsize, "extentsize", 4, "devmapper extent size (mbytes)")
 	flag.Parse()
 
 	options := []string{}
-
-	if devname != "" {
-		options = append(options, fmt.Sprintf("devname=%s", devname))
-	}
+	options = append(options, fmt.Sprintf("devname=%s", devname))
+	options = append(options, fmt.Sprintf("groupname=%s", groupname))
+	options = append(options, fmt.Sprintf("extentsize=%d", extentsize))
 
 	d, _ := newOverlitDriver(options)
 	h := graphhelper.NewHandler(d)

@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/docker/docker/daemon/graphdriver"
@@ -40,7 +41,9 @@ const (
 )
 
 type overlitOptions struct {
-	devname string
+	devname    string
+	groupname  string
+	extentsize int64
 }
 
 type overlitDriver struct {
@@ -66,6 +69,10 @@ func parseOptions(options []string) (*overlitOptions, error) {
 		switch key {
 		case "devname":
 			opts.devname = val
+		case "groupname":
+			opts.groupname = val
+		case "extentsize":
+			opts.extentsize, err = strconv.ParseInt(val, 10, 64)
 		default:
 			return nil, fmt.Errorf("overlit: Unknown option (%s = %s)", key, val)
 		}
@@ -515,10 +522,6 @@ func (d *overlitDriver) Capabilities() graphdriver.Capabilities {
 func newOverlitDriver(options []string) (*overlitDriver, error) {
 	log.Printf("overlit: createDriver ()\n")
 
-	if err := checkLVMAvailable(); err != nil {
-		return nil, errors.Wrap(err, "lvm is not ready")
-	}
-
 	opts, err := parseOptions(options)
 	if err != nil {
 		return nil, err
@@ -527,12 +530,28 @@ func newOverlitDriver(options []string) (*overlitDriver, error) {
 	d := &overlitDriver{}
 	d.options = *opts
 
-	if avail, err := checkBlockDeviceAvailable(d.options.devname); avail == false || err != nil {
+	// Check if lvm binaries is available
+	if err := checkLVMAvailable(); err != nil {
+		return nil, errors.Wrap(err, "lvm is not ready")
+	}
+
+	// Check if a block device for lvm is available
+	avail, err := checkBlockDeviceAvailable(d.options.devname)
+	if avail == false || err != nil {
 		return nil, err
 	}
 
-	if ready, err := checkLVMDeviceReady(d.options.devname); ready == false || err != nil {
+	// Check if a lvm device is ready
+	ready, err := checkLVMDeviceReady(d.options.devname)
+	if err != nil {
 		return nil, err
+	}
+
+	if !ready {
+		// If the lvm device is not ready, create physical volume and volume group
+		if err := createLVMDevice(d.options.devname, d.options.groupname, d.options.extentsize); err != nil {
+			return nil, err
+		}
 	}
 
 	return d, nil
