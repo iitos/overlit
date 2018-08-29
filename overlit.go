@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -23,6 +22,7 @@ import (
 	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/docker/docker/pkg/system"
+	"github.com/pkg/errors"
 
 	graphhelper "github.com/docker/go-plugins-helpers/graphdriver"
 	rsystem "github.com/opencontainers/runc/libcontainer/system"
@@ -67,7 +67,7 @@ func parseOptions(options []string) (*overlitOptions, error) {
 		case "devname":
 			opts.devname = val
 		default:
-			return nil, fmt.Errorf("OVERLIT: Unknown option (%s = %s)", key, val)
+			return nil, fmt.Errorf("overlit: Unknown option (%s = %s)", key, val)
 		}
 	}
 
@@ -224,7 +224,7 @@ func (d *overlitDriver) create(id, parent string) (retErr error) {
 }
 
 func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []idtools.IDMap) error {
-	log.Printf("OVERLIT: Init (home = %s)\n", home)
+	log.Printf("overlit: init (home = %s)\n", home)
 
 	d.home = home
 	d.uidMaps = uidMaps
@@ -244,18 +244,18 @@ func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []i
 }
 
 func (d *overlitDriver) Create(id, parent, mountLabel string, storageOpt map[string]string) error {
-	log.Printf("OVERLIT: Create (id = %s, parent = %s, mountLabel = %s)\n", id, parent, mountLabel)
+	log.Printf("overlit: create (id = %s, parent = %s, mountLabel = %s)\n", id, parent, mountLabel)
 
 	return d.create(id, parent)
 }
 
 func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOpt map[string]string) error {
-	log.Printf("OVERLIT: CreateReadWrite (id = %s, parent = %s, mountLabel = %s)\n", id, parent, mountLabel)
+	log.Printf("overlit: createreadwrite (id = %s, parent = %s, mountLabel = %s)\n", id, parent, mountLabel)
 
 	for key, val := range storageOpt {
 		switch key {
 		default:
-			return fmt.Errorf("OVERLIT: not supported option (%s = %s)", key, val)
+			return errors.Errorf("not supported option (%s = %s)", key, val)
 		}
 	}
 
@@ -263,7 +263,7 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 }
 
 func (d *overlitDriver) Remove(id string) error {
-	log.Printf("OVERLIT: Remove (id = %s)\n", id)
+	log.Printf("overlit: remove (id = %s)\n", id)
 
 	d.locker.Lock(id)
 	defer d.locker.Unlock(id)
@@ -271,7 +271,7 @@ func (d *overlitDriver) Remove(id string) error {
 	lid, err := ioutil.ReadFile(path.Join(dir, "link"))
 	if err == nil {
 		if err := os.RemoveAll(path.Join(d.home, linkDir, string(lid))); err != nil {
-			log.Printf("OVERLIT: Failed to remove link: %v", err)
+			log.Printf("overlit: failed to remove link: %v", err)
 		}
 	}
 
@@ -282,7 +282,7 @@ func (d *overlitDriver) Remove(id string) error {
 }
 
 func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, retErr error) {
-	log.Printf("OVERLIT: Get (id = %s)\n", id)
+	log.Printf("overlit: get (id = %s)\n", id)
 
 	d.locker.Lock(id)
 	defer d.locker.Unlock(id)
@@ -309,10 +309,10 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 		if retErr != nil {
 			if c := d.ctr.Decrement(mergedDir); c <= 0 {
 				if mntErr := unix.Unmount(mergedDir, 0); mntErr != nil {
-					log.Printf("OVERLIT: Failed to mount %v: %v", mergedDir, mntErr)
+					log.Printf("overlit: failed to mount %v: %v", mergedDir, mntErr)
 				}
 				if rmErr := unix.Rmdir(mergedDir); rmErr != nil && !os.IsNotExist(rmErr) {
-					log.Printf("OVERLIT: Failed to remove %s: %v, %v", id, rmErr, err)
+					log.Printf("overlit: failed to remove %s: %v, %v", id, rmErr, err)
 				}
 			}
 		}
@@ -347,7 +347,7 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 		opts = fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", string(lowers), path.Join(id, "diff"), path.Join(id, "work"))
 		mountData = label.FormatMountLabel(opts, mountLabel)
 		if len(mountData) > pageSize {
-			return nil, fmt.Errorf("OVERLIT: cannot mount layer, mount label too large %d", len(mountData))
+			return nil, errors.Errorf("cannot mount layer, mount label too large %d", len(mountData))
 		}
 
 		mount = func(source string, target string, mType string, flags uintptr, label string) error {
@@ -357,7 +357,7 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 	}
 
 	if err := mount("overlay", mountTarget, "overlay", 0, mountData); err != nil {
-		return nil, fmt.Errorf("error creating overlay mount to %s: %v", mergedDir, err)
+		return nil, errors.Errorf("error creating overlay mount to %s: %v", mergedDir, err)
 	}
 
 	if err := os.Chown(path.Join(workDir, "work"), rootUID, rootGID); err != nil {
@@ -368,7 +368,7 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 }
 
 func (d *overlitDriver) Put(id string) error {
-	log.Printf("OVERLIT: Put (id = %s)\n", id)
+	log.Printf("overlit: put (id = %s)\n", id)
 
 	d.locker.Lock(id)
 	defer d.locker.Unlock(id)
@@ -387,17 +387,17 @@ func (d *overlitDriver) Put(id string) error {
 		return nil
 	}
 	if err := unix.Unmount(mountpoint, unix.MNT_DETACH); err != nil {
-		log.Printf("OVERLIT: Failed to unmount %s: %s, %v", id, mountpoint, err)
+		log.Printf("overlit: failed to unmount %s: %s, %v", id, mountpoint, err)
 	}
 	if err := unix.Rmdir(mountpoint); err != nil && !os.IsNotExist(err) {
-		log.Printf("OVERLIT: Failed to remove %s: %v", id, err)
+		log.Printf("overlit: failed to remove %s: %v", id, err)
 	}
 
 	return nil
 }
 
 func (d *overlitDriver) Exists(id string) bool {
-	log.Printf("OVERLIT: Exists (id = %s)\n", id)
+	log.Printf("overlit: exists (id = %s)\n", id)
 
 	_, err := os.Stat(d.dir(id))
 
@@ -405,13 +405,13 @@ func (d *overlitDriver) Exists(id string) bool {
 }
 
 func (d *overlitDriver) Status() [][2]string {
-	log.Printf("OVERLIT: Status\n")
+	log.Printf("overlit: status\n")
 
 	return nil
 }
 
 func (d *overlitDriver) GetMetadata(id string) (map[string]string, error) {
-	log.Printf("OVERLIT: GetMetadata (id = %s)\n", id)
+	log.Printf("overlit: getmetadata (id = %s)\n", id)
 
 	dir := d.dir(id)
 	if _, err := os.Stat(dir); err != nil {
@@ -436,13 +436,13 @@ func (d *overlitDriver) GetMetadata(id string) (map[string]string, error) {
 }
 
 func (d *overlitDriver) Cleanup() error {
-	log.Printf("OVERLIT: Cleanup\n")
+	log.Printf("overlit: cleanup\n")
 
 	return mount.RecursiveUnmount(d.home)
 }
 
 func (d *overlitDriver) Diff(id, parent string) io.ReadCloser {
-	log.Printf("OVERLIT: Diff (id = %s, parent = %s)\n", id, parent)
+	log.Printf("overlit: diff (id = %s, parent = %s)\n", id, parent)
 
 	diffPath := d.getDiffPath(id)
 
@@ -457,7 +457,7 @@ func (d *overlitDriver) Diff(id, parent string) io.ReadCloser {
 }
 
 func (d *overlitDriver) Changes(id, parent string) ([]graphhelper.Change, error) {
-	log.Printf("OVERLIT: Changes (id = %s, parent = %s)\n", id, parent)
+	log.Printf("overlit: changes (id = %s, parent = %s)\n", id, parent)
 
 	diffPath := d.getDiffPath(id)
 	parentPath := ""
@@ -481,7 +481,7 @@ func (d *overlitDriver) Changes(id, parent string) ([]graphhelper.Change, error)
 }
 
 func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, error) {
-	log.Printf("OVERLIT: ApplyDiff (id = %s, parent = %s)\n", id, parent)
+	log.Printf("overlit: applydiff (id = %s, parent = %s)\n", id, parent)
 
 	applyDir := d.getDiffPath(id)
 
@@ -501,19 +501,19 @@ func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, err
 }
 
 func (d *overlitDriver) DiffSize(id, parent string) (int64, error) {
-	log.Printf("OVERLIT: DiffSize (id = %s, parent = %s)\n", id, parent)
+	log.Printf("overlit: diffsize (id = %s, parent = %s)\n", id, parent)
 
 	return directory.Size(context.TODO(), d.getDiffPath(id))
 }
 
 func (d *overlitDriver) Capabilities() graphdriver.Capabilities {
-	log.Printf("OVERLIT: Capabilities\n")
+	log.Printf("overlit: capabilities\n")
 
 	return graphdriver.Capabilities{}
 }
 
 func newOverlitDriver(options []string) (*overlitDriver, error) {
-	log.Printf("OVERLIT: CreateDriver ()\n")
+	log.Printf("overlit: createDriver ()\n")
 
 	opts, err := parseOptions(options)
 	if err != nil {
