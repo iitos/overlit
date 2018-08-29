@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os/exec"
 
 	"github.com/pkg/errors"
@@ -32,14 +33,21 @@ func checkBlockDeviceAvailable(devname string) (bool, error) {
 }
 
 func checkLVMDeviceReady(devname string) (bool, error) {
-	pvDisplay, err := exec.LookPath("pvdisplay")
-	if err != nil {
-		return false, errors.New("could not find pvdisplay")
-	}
-
-	if _, err = exec.Command(pvDisplay, devname).CombinedOutput(); err != nil {
+	if _, err := exec.Command("pvdisplay", devname).CombinedOutput(); err != nil {
 		return false, nil
 	}
 
 	return true, nil
+}
+
+func createLVMDevice(devname string, groupname string, extentsize int64) error {
+	if out, err := exec.Command("pvcreate", "-f", devname).CombinedOutput(); err != nil {
+		return errors.Wrap(err, string(out))
+	}
+
+	if out, err := exec.Command("vgcreate", "-s", fmt.Sprintf("%dM", extentsize), groupname, devname).CombinedOutput(); err != nil {
+		return errors.Wrap(err, string(out))
+	}
+
+	return nil
 }
