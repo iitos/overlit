@@ -28,7 +28,9 @@ func main() {
 	options = append(options, fmt.Sprintf("groupname=%s", groupname))
 	options = append(options, fmt.Sprintf("extentsize=%d", extentsize))
 
-	d, _ := newOverlitDriver(options)
-	h := graphhelper.NewHandler(d)
-	h.ServeUnix(sockAddr, 0)
+	d, err := newOverlitDriver(options)
+	if err == nil {
+		h := graphhelper.NewHandler(d)
+		h.ServeUnix(sockAddr, 0)
+	}
 }
