@@ -19,20 +19,11 @@ func checkLVMAvailable() error {
 	return nil
 }
 
-func checkBlockDeviceAvailable(devname string) (bool, error) {
-	blkid, err := exec.LookPath("blkid")
-	if err != nil {
-		return false, errors.New("could not find blkid")
-	}
-
-	if _, err = exec.Command(blkid, devname).CombinedOutput(); err != nil {
-		return false, nil
-	}
-
-	return true, nil
-}
-
 func checkLVMDeviceReady(devname string) (bool, error) {
+	if _, err := exec.Command("blkid", devname).CombinedOutput(); err != nil {
+		return false, errors.Errorf("'%s' device is not block device", devname)
+	}
+
 	if _, err := exec.Command("pvdisplay", devname).CombinedOutput(); err != nil {
 		return false, nil
 	}
