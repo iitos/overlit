@@ -527,7 +527,11 @@ func newOverlitDriver(options []string) (*overlitDriver, error) {
 	d := &overlitDriver{}
 	d.options = *opts
 
-	if err := checkLVMDeviceReady(d.options.devname); err != nil {
+	if avail, err := checkBlockDeviceAvailable(d.options.devname); avail == false || err != nil {
+		return nil, err
+	}
+
+	if ready, err := checkLVMDeviceReady(d.options.devname); ready == false || err != nil {
 		return nil, err
 	}
 

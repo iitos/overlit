@@ -18,16 +18,28 @@ func checkLVMAvailable() error {
 	return nil
 }
 
-func checkLVMDeviceReady(devname string) error {
+func checkBlockDeviceAvailable(devname string) (bool, error) {
+	blkid, err := exec.LookPath("blkid")
+	if err != nil {
+		return false, errors.New("could not find blkid")
+	}
+
+	if _, err = exec.Command(blkid, devname).CombinedOutput(); err != nil {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func checkLVMDeviceReady(devname string) (bool, error) {
 	pvDisplay, err := exec.LookPath("pvdisplay")
 	if err != nil {
-		return errors.New("could not find pvdisplay")
+		return false, errors.New("could not find pvdisplay")
 	}
 
-	_, err = exec.Command(pvDisplay, devname).CombinedOutput()
-	if err != nil {
-		return nil
+	if _, err = exec.Command(pvDisplay, devname).CombinedOutput(); err != nil {
+		return false, nil
 	}
 
-	return nil
+	return true, nil
 }
