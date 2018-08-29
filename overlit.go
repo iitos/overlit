@@ -40,6 +40,7 @@ const (
 )
 
 type overlitOptions struct {
+	devname string
 }
 
 type overlitDriver struct {
@@ -63,6 +64,8 @@ func parseOptions(options []string) (*overlitOptions, error) {
 		}
 		key = strings.ToLower(key)
 		switch key {
+		case "devname":
+			opts.devname = val
 		default:
 			return nil, fmt.Errorf("OVERLIT: Unknown option (%s = %s)", key, val)
 		}
@@ -223,17 +226,11 @@ func (d *overlitDriver) create(id, parent string) (retErr error) {
 func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []idtools.IDMap) error {
 	log.Printf("OVERLIT: Init (home = %s)\n", home)
 
-	opts, err := parseOptions(options)
-	if err != nil {
-		return err
-	}
-
 	d.home = home
 	d.uidMaps = uidMaps
 	d.gidMaps = gidMaps
 	d.ctr = graphdriver.NewRefCounter(graphdriver.NewFsChecker(graphdriver.FsMagicOverlay))
 	d.locker = locker.New()
-	d.options = *opts
 
 	rootUID, rootGID, err := idtools.GetRootUIDGID(uidMaps, gidMaps)
 	if err != nil {
@@ -515,10 +512,16 @@ func (d *overlitDriver) Capabilities() graphdriver.Capabilities {
 	return graphdriver.Capabilities{}
 }
 
-func newOverlitDriver() (*overlitDriver, error) {
+func newOverlitDriver(options []string) (*overlitDriver, error) {
 	log.Printf("OVERLIT: CreateDriver ()\n")
 
+	opts, err := parseOptions(options)
+	if err != nil {
+		return nil, err
+	}
+
 	d := &overlitDriver{}
+	d.options = *opts
 
 	return d, nil
 }
