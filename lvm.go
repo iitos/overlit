@@ -6,7 +6,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func checkLVMReady() error {
+func checkLVMAvailable() error {
 	binaries := []string{"pvcreate", "pvdisplay", "pvremove", "vgcreate", "vgdisplay", "vgremove", "lvcreate", "lvdisplay", "lvremove"}
 
 	for _, bin := range binaries {
