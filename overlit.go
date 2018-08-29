@@ -532,12 +532,6 @@ func newOverlitDriver(options []string) (*overlitDriver, error) {
 
 	// Check if lvm binaries is available
 	if err := checkLVMAvailable(); err != nil {
-		return nil, errors.Wrap(err, "lvm is not ready")
-	}
-
-	// Check if a block device for lvm is available
-	avail, err := checkBlockDeviceAvailable(d.options.devname)
-	if avail == false || err != nil {
 		return nil, err
 	}
 
