@@ -515,6 +515,10 @@ func (d *overlitDriver) Capabilities() graphdriver.Capabilities {
 func newOverlitDriver(options []string) (*overlitDriver, error) {
 	log.Printf("overlit: createDriver ()\n")
 
+	if err := checkLVMReady(); err != nil {
+		return nil, errors.Wrap(err, "lvm is not ready")
+	}
+
 	opts, err := parseOptions(options)
 	if err != nil {
 		return nil, err
@@ -522,6 +526,10 @@ func newOverlitDriver(options []string) (*overlitDriver, error) {
 
 	d := &overlitDriver{}
 	d.options = *opts
+
+	if err := checkLVMDeviceReady(d.options.devname); err != nil {
+		return nil, err
+	}
 
 	return d, nil
 }
