@@ -51,3 +51,19 @@ func createLVMDevice(devname string, groupname string, extentsize int64) error {
 
 	return nil
 }
+
+func createLVMVolume(groupname string, volumename string, alloc string, size int64) error {
+	if out, err := exec.Command("lvcreate", groupname, "-n", volumename, "--alloc", alloc, "-L", fmt.Sprintf("%dM", size)).CombinedOutput(); err != nil {
+		return errors.Wrap(err, string(out))
+	}
+
+	return nil
+}
+
+func removeLVMVolume(groupname string, volumename string) error {
+	if out, err := exec.Command("lvremove", fmt.Sprintf("/dev/%s/%s", groupname, volumename)).CombinedOutput(); err != nil {
+		return errors.Wrap(err, string(out))
+	}
+
+	return nil
+}
