@@ -1,14 +1,12 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -79,24 +77,6 @@ func parseOptions(options []string) (*overlitOptions, error) {
 	}
 
 	return opts, nil
-}
-
-func supportsOverlay() error {
-	exec.Command("modprobe", "overlay").Run()
-
-	f, err := os.Open("/proc/filesystems")
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	s := bufio.NewScanner(f)
-	for s.Scan() {
-		if s.Text() == "nodev\toverlay" {
-			return nil
-		}
-	}
-	return graphdriver.ErrNotSupported
 }
 
 func (d *overlitDriver) dir(id string) string {
@@ -354,7 +334,7 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 		opts = fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", string(lowers), path.Join(id, "diff"), path.Join(id, "work"))
 		mountData = label.FormatMountLabel(opts, mountLabel)
 		if len(mountData) > pageSize {
-			return nil, errors.Errorf("cannot mount layer, mount label too large %d", len(mountData))
+			return nil, errors.Errorf("could not mount layer, mount label too large %d", len(mountData))
 		}
 
 		mount = func(source string, target string, mType string, flags uintptr, label string) error {
@@ -529,6 +509,11 @@ func newOverlitDriver(options []string) (*overlitDriver, error) {
 
 	d := &overlitDriver{}
 	d.options = *opts
+
+	// Check if overlayfs is available
+	if err := checkOverlayFSAvailable(); err != nil {
+		return nil, err
+	}
 
 	// Check if lvm binaries is available
 	if err := checkLVMAvailable(); err != nil {
