@@ -39,9 +39,9 @@ const (
 )
 
 type overlitOptions struct {
-	devname    string
-	groupname  string
-	extentsize int64
+	DevName    string
+	GroupName  string
+	ExtentSize int64
 }
 
 type overlitDriver struct {
@@ -66,11 +66,11 @@ func parseOptions(options []string) (*overlitOptions, error) {
 		key = strings.ToLower(key)
 		switch key {
 		case "devname":
-			opts.devname = val
+			opts.DevName = val
 		case "groupname":
-			opts.groupname = val
+			opts.GroupName = val
 		case "extentsize":
-			opts.extentsize, err = strconv.ParseInt(val, 10, 64)
+			opts.ExtentSize, err = strconv.ParseInt(val, 10, 64)
 		default:
 			return nil, fmt.Errorf("overlit: Unknown option (%s = %s)", key, val)
 		}
@@ -524,12 +524,12 @@ func newOverlitDriver(options []string) (*overlitDriver, error) {
 	}
 
 	// Check if a lvm device is ready
-	ready, err := checkLVMDeviceReady(d.options.devname)
+	ready, err := checkLVMDeviceReady(d.options.DevName)
 	if err != nil {
 		return nil, err
 	} else if !ready {
 		// If the lvm device is not ready, create physical volume and volume group
-		if err := createLVMDevice(d.options.devname, d.options.groupname, d.options.extentsize); err != nil {
+		if err := createLVMDevice(d.options.DevName, d.options.GroupName, d.options.ExtentSize); err != nil {
 			return nil, err
 		}
 	}
