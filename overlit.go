@@ -79,18 +79,18 @@ func parseOptions(options []string) (*overlitOptions, error) {
 	return opts, nil
 }
 
-func (d *overlitDriver) dir(id string) string {
+func (d *overlitDriver) getDirPath(id string) string {
 	return path.Join(d.home, id)
 }
 
 func (d *overlitDriver) getDiffPath(id string) string {
-	dir := d.dir(id)
+	dir := d.getDirPath(id)
 
 	return path.Join(dir, "diff")
 }
 
-func (d *overlitDriver) getLower(parent string) (string, error) {
-	parentDir := d.dir(parent)
+func (d *overlitDriver) getLowerPath(parent string) (string, error) {
+	parentDir := d.getDirPath(parent)
 
 	if _, err := os.Lstat(parentDir); err != nil {
 		return "", err
@@ -116,7 +116,7 @@ func (d *overlitDriver) getLower(parent string) (string, error) {
 func (d *overlitDriver) getLowerDirs(id string) ([]string, error) {
 	var lowersArray []string
 
-	lowers, err := ioutil.ReadFile(path.Join(d.dir(id), lowerFile))
+	lowers, err := ioutil.ReadFile(path.Join(d.getDirPath(id), lowerFile))
 	if err == nil {
 		for _, s := range strings.Split(string(lowers), ":") {
 			lp, err := os.Readlink(path.Join(d.home, s))
@@ -142,7 +142,7 @@ func (d *overlitDriver) isParent(id, parent string) bool {
 
 	var ld string
 
-	parentDir := d.dir(parent)
+	parentDir := d.getDirPath(parent)
 	if len(lowers) > 0 {
 		ld = filepath.Dir(lowers[0])
 	}
@@ -153,7 +153,7 @@ func (d *overlitDriver) isParent(id, parent string) bool {
 }
 
 func (d *overlitDriver) create(id, parent string) (retErr error) {
-	dir := d.dir(id)
+	dir := d.getDirPath(id)
 
 	rootUID, rootGID, err := idtools.GetRootUIDGID(d.uidMaps, d.gidMaps)
 	if err != nil {
@@ -196,7 +196,7 @@ func (d *overlitDriver) create(id, parent string) (retErr error) {
 		return err
 	}
 
-	lower, err := d.getLower(parent)
+	lower, err := d.getLowerPath(parent)
 	if err != nil {
 		return err
 	}
@@ -254,7 +254,7 @@ func (d *overlitDriver) Remove(id string) error {
 
 	d.locker.Lock(id)
 	defer d.locker.Unlock(id)
-	dir := d.dir(id)
+	dir := d.getDirPath(id)
 	lid, err := ioutil.ReadFile(path.Join(dir, "link"))
 	if err == nil {
 		if err := os.RemoveAll(path.Join(d.home, linkDir, string(lid))); err != nil {
@@ -274,7 +274,7 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 	d.locker.Lock(id)
 	defer d.locker.Unlock(id)
 
-	dir := d.dir(id)
+	dir := d.getDirPath(id)
 	if _, err := os.Stat(dir); err != nil {
 		return nil, err
 	}
@@ -360,7 +360,7 @@ func (d *overlitDriver) Put(id string) error {
 	d.locker.Lock(id)
 	defer d.locker.Unlock(id)
 
-	dir := d.dir(id)
+	dir := d.getDirPath(id)
 	_, err := ioutil.ReadFile(path.Join(dir, lowerFile))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -386,7 +386,7 @@ func (d *overlitDriver) Put(id string) error {
 func (d *overlitDriver) Exists(id string) bool {
 	log.Printf("overlit: exists (id = %s)\n", id)
 
-	_, err := os.Stat(d.dir(id))
+	_, err := os.Stat(d.getDirPath(id))
 
 	return err == nil
 }
@@ -400,7 +400,7 @@ func (d *overlitDriver) Status() [][2]string {
 func (d *overlitDriver) GetMetadata(id string) (map[string]string, error) {
 	log.Printf("overlit: getmetadata (id = %s)\n", id)
 
-	dir := d.dir(id)
+	dir := d.getDirPath(id)
 	if _, err := os.Stat(dir); err != nil {
 		return nil, err
 	}
