@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 )
 
 import (
@@ -29,8 +30,11 @@ func main() {
 	options = append(options, fmt.Sprintf("extentsize=%d", extentsize))
 
 	d, err := newOverlitDriver(options)
-	if err == nil {
-		h := graphhelper.NewHandler(d)
-		h.ServeUnix(sockAddr, 0)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
+
+	h := graphhelper.NewHandler(d)
+	h.ServeUnix(sockAddr, 0)
 }
