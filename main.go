@@ -27,7 +27,7 @@ func main() {
 	options := []string{}
 	options = append(options, fmt.Sprintf("devname=%s", devName))
 	options = append(options, fmt.Sprintf("groupname=%s", groupName))
-	options = append(options, fmt.Sprintf("extentSize=%d", extentSize))
+	options = append(options, fmt.Sprintf("extentsize=%d", extentSize))
 
 	d, err := newOverlitDriver(options)
 	if err != nil {
