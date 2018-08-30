@@ -461,7 +461,10 @@ func (d *overlitDriver) Changes(id, parent string) ([]graphhelper.Change, error)
 	changes := make([]graphhelper.Change, len(_changes))
 
 	for i, _change := range _changes {
-		changes[i] = graphhelper.Change{Path: _change.Path, Kind: graphhelper.ChangeKind(_change.Kind)}
+		changes[i] = graphhelper.Change{
+			Path: _change.Path,
+			Kind: graphhelper.ChangeKind(_change.Kind),
+		}
 	}
 
 	return changes, nil
@@ -524,9 +527,7 @@ func newOverlitDriver(options []string) (*overlitDriver, error) {
 	ready, err := checkLVMDeviceReady(d.options.devname)
 	if err != nil {
 		return nil, err
-	}
-
-	if !ready {
+	} else if !ready {
 		// If the lvm device is not ready, create physical volume and volume group
 		if err := createLVMDevice(d.options.devname, d.options.groupname, d.options.extentsize); err != nil {
 			return nil, err
