@@ -1,10 +1,42 @@
 package main
 
+/*
+#cgo LDFLAGS: -ldevmapper
+#define _GNU_SOURCE
+#include <libdevmapper.h>
+*/
 import "C"
 
 import (
 	"reflect"
 	"unsafe"
+)
+
+const (
+	deviceCreate = iota
+	deviceReload
+	deviceRemove
+	deviceRemoveAll
+	deviceSuspend
+	deviceResume
+	deviceInfo
+	deviceDeps
+	deviceRename
+	deviceVersion
+	deviceStatus
+	deviceTable
+	deviceWaitevent
+	deviceList
+	deviceClear
+	deviceMknodes
+	deviceListVersions
+	deviceTargetMsg
+	deviceSetGeometry
+)
+
+const (
+	addNodeOnResume = iota
+	addNodeOnCreate
 )
 
 type (
