@@ -250,5 +250,14 @@ func dmToolAddDevice(dmtool *DmTool, name string, size uint64) error {
 }
 
 func dmToolDeleteDevice(dmtool *DmTool, name string) error {
+	device := dmtool.Devices[name]
+
+	for _, target := range device.Targets {
+		start := uint64(target >> 8)
+		count := uint64(target & 0xff)
+
+		putExtents(dmtool, start, count)
+	}
+
 	return deleteDevice(dmtool, name)
 }
