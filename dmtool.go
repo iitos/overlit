@@ -83,7 +83,7 @@ func attachDevice(dmtool *DmTool, devname string) error {
 
 	device := dmtool.Devices[devname]
 
-	multis := uint64(dmtool.ExtentSize * 1024 * 1024 / 512)
+	multis := uint64(dmtool.ExtentSize / 512)
 
 	task := dmTaskCreate(deviceCreate)
 	dmTaskSetName(task, devname)
@@ -141,9 +141,9 @@ func dmToolSetup(devpath string, extentsize uint64, jsonpath string) (*DmTool, e
 		return nil, errors.New("%v block device is not available")
 	}
 
-	log.Printf("overlit: prepare (devpath = %v, devsize = %v mbytes, extentsize = %v mbytes)\n", devpath, devsize/1024/1024, extentsize)
+	log.Printf("overlit: prepare (devpath = %v, devsize = %v bytes, extentsize = %v bytes)\n", devpath, devsize, extentsize)
 
-	dmtool.blockbits = bitset.New(uint(devsize) / uint(extentsize*1024*1024))
+	dmtool.blockbits = bitset.New(uint(devsize) / uint(extentsize))
 
 	if jsondata, err := ioutil.ReadFile(jsonpath); err == nil {
 		if err := json.Unmarshal(jsondata, &dmtool); err != nil {
@@ -211,7 +211,7 @@ func dmToolFlush(dmtool *DmTool) error {
 func dmToolCreateDevice(dmtool *DmTool, name string, size uint64) error {
 	device := &DmDevice{}
 
-	remains := size / (dmtool.ExtentSize * 1024 * 1024)
+	remains := size / dmtool.ExtentSize
 	start := uint64(0)
 
 	for remains > 0 {
