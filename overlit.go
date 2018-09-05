@@ -214,8 +214,6 @@ func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []i
 
 	d.dmtool = dmtool
 
-	dmToolAddDevice(dmtool, "dmdm0", 128*1024*1024)
-
 	return nil
 }
 

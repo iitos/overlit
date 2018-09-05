@@ -136,6 +136,18 @@ func deleteDevice(dmtool *DmTool, devname string) error {
 	return nil
 }
 
+func checkDevice(dmtool *DmTool, devname string) int {
+	info := &DmInfo{}
+
+	task := dmTaskCreate(deviceInfo)
+	dmTaskSetName(task, devname)
+	dmTaskRun(task)
+	dmTaskGetInfo(task, info)
+	dmTaskDestroy(task)
+
+	return info.Exists
+}
+
 func dmToolPrepare(devpath string, extentsize uint64, jsonpath string) (*DmTool, error) {
 	dmtool := &DmTool{Devices: make(map[string]*DmDevice)}
 
@@ -154,6 +166,18 @@ func dmToolPrepare(devpath string, extentsize uint64, jsonpath string) (*DmTool,
 		}
 
 		if dmtool.DevPath == devpath && dmtool.ExtentSize == extentsize {
+			for devname, device := range dmtool.Devices {
+				for _, target := range device.Targets {
+					start := uint64(target >> 8)
+					count := uint64(target & 0xff)
+
+					setExtents(dmtool, start, count)
+				}
+
+				if res := checkDevice(dmtool, devname); res == 0 {
+					addDevice(dmtool, devname)
+				}
+			}
 		}
 	}
 
