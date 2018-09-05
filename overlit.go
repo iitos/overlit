@@ -40,7 +40,7 @@ const (
 type overlitOptions struct {
 	DevName    string
 	GroupName  string
-	ExtentSize int64
+	ExtentSize uint64
 }
 
 type overlitDriver struct {
@@ -71,7 +71,7 @@ func parseOptions(options []string) (*overlitOptions, error) {
 		case "groupname":
 			opts.GroupName = val
 		case "extentsize":
-			opts.ExtentSize, err = strconv.ParseInt(val, 10, 64)
+			opts.ExtentSize, err = strconv.ParseUint(val, 10, 64)
 		default:
 			return nil, fmt.Errorf("overlit: Unknown option (%s = %s)", key, val)
 		}
@@ -213,6 +213,8 @@ func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []i
 	}
 
 	d.dmtool = dmtool
+
+	dmToolAddDevice(dmtool, "dmdm0", 128*1024*1024)
 
 	return nil
 }
@@ -505,22 +507,6 @@ func newOverlitDriver(options []string) (*overlitDriver, error) {
 	// Check if overlayfs is available
 	if err := checkOverlayFSAvailable(); err != nil {
 		return nil, err
-	}
-
-	// Check if lvm binaries is available
-	if err := checkLVMAvailable(); err != nil {
-		return nil, err
-	}
-
-	// Check if a lvm device is ready
-	ready, err := checkLVMDeviceReady(d.options.DevName)
-	if err != nil {
-		return nil, err
-	} else if !ready {
-		// If the lvm device is not ready, create physical volume and volume group
-		if err := createLVMDevice(d.options.DevName, d.options.GroupName, d.options.ExtentSize); err != nil {
-			return nil, err
-		}
 	}
 
 	return d, nil
