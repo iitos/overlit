@@ -53,6 +53,8 @@ type overlitDriver struct {
 
 	ctr    *graphdriver.RefCounter
 	locker *locker.Locker
+
+	dmtool *DmTool
 }
 
 func parseOptions(options []string) (*overlitOptions, error) {
@@ -204,6 +206,13 @@ func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []i
 	if err := idtools.MkdirAllAndChown(path.Join(home, linkDir), 0700, idtools.Identity{UID: rootUID, GID: rootGID}); err != nil {
 		return err
 	}
+
+	dmtool, err := prepareDmTool(d.options.DevName, d.options.ExtentSize, fmt.Sprintf("%v/dmtool.json", d.home))
+	if err != nil {
+		return err
+	}
+
+	d.dmtool = dmtool
 
 	return nil
 }
@@ -402,6 +411,8 @@ func (d *overlitDriver) GetMetadata(id string) (map[string]string, error) {
 
 func (d *overlitDriver) Cleanup() error {
 	log.Printf("overlit: cleanup\n")
+
+	cleanupDmTool(d.dmtool)
 
 	return mount.RecursiveUnmount(d.home)
 }
