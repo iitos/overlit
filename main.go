@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	sockAddr = "/run/docker/plugins/overlit.sock"
+	sockAddr = "/run/docker/plugins/%v.sock"
 )
 
 func main() {
@@ -36,5 +36,5 @@ func main() {
 	}
 
 	h := graphhelper.NewHandler(d)
-	h.ServeUnix(sockAddr, 0)
+	h.ServeUnix(fmt.Sprintf(sockAddr, driverName), 0)
 }
