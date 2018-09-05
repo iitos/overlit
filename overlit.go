@@ -207,7 +207,7 @@ func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []i
 		return err
 	}
 
-	dmtool, err := prepareDmTool(d.options.DevName, d.options.ExtentSize, fmt.Sprintf("%v/dmtool.json", d.home))
+	dmtool, err := dmToolPrepare(d.options.DevName, d.options.ExtentSize, fmt.Sprintf("%v/dmtool.json", d.home))
 	if err != nil {
 		return err
 	}
@@ -412,7 +412,7 @@ func (d *overlitDriver) GetMetadata(id string) (map[string]string, error) {
 func (d *overlitDriver) Cleanup() error {
 	log.Printf("overlit: cleanup\n")
 
-	cleanupDmTool(d.dmtool)
+	dmToolCleanup(d.dmtool)
 
 	return mount.RecursiveUnmount(d.home)
 }

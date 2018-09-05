@@ -1,11 +1,11 @@
 package main
 
 import (
-	"os"
+	"encoding/json"
 	"io"
 	"io/ioutil"
+	"os"
 	"path/filepath"
-	"encoding/json"
 
 	"github.com/pkg/errors"
 	"github.com/willf/bitset"
@@ -30,7 +30,7 @@ func init() {
 	dmUdevSetSyncSupport(1)
 }
 
-func prepareDmTool(devpath string, extentsize int64, jsonpath string) (*DmTool, error) {
+func dmToolPrepare(devpath string, extentsize int64, jsonpath string) (*DmTool, error) {
 	dmtool := &DmTool{}
 
 	fi, err := os.Stat(devpath)
@@ -57,11 +57,11 @@ func prepareDmTool(devpath string, extentsize int64, jsonpath string) (*DmTool, 
 	return dmtool, nil
 }
 
-func cleanupDmTool(dmtool *DmTool) {
-	flushDmTool(dmtool)
+func dmToolCleanup(dmtool *DmTool) {
+	dmToolFlush(dmtool)
 }
 
-func flushDmTool(dmtool *DmTool) error {
+func dmToolFlush(dmtool *DmTool) error {
 	jsondata, err := json.Marshal(dmtool)
 	if err != nil {
 		return errors.New("could not encode json config")
@@ -92,7 +92,7 @@ func flushDmTool(dmtool *DmTool) error {
 	return nil
 }
 
-func createDmToolDevice(dmtool *DmTool, name string) {
+func dmToolAddDevice(dmtool *DmTool, name string) {
 	var cookie uint
 
 	task := dmTaskCreate(deviceCreate)
