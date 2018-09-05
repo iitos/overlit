@@ -23,9 +23,9 @@ type DmTool struct {
 	ExtentSize uint64               `json:"extentsize"`
 	Devices    map[string]*DmDevice `json:"devices"`
 
-	blockbits *bitset.BitSet
-	nblocks   uint64
-	lastblock uint64
+	extentbits *bitset.BitSet
+	extents    uint64
+	lastextent uint64
 
 	jsonpath string
 }
@@ -41,12 +41,12 @@ func getTarget(target uint64) (start, count uint64) {
 	return
 }
 
-func findExtents(dmtool *DmTool, blocks, offset uint64) (uint64, uint64, uint64) {
+func findExtents(dmtool *DmTool, extents, offset uint64) (uint64, uint64, uint64) {
 	start := uint64(0)
 	count := uint64(0)
 
-	for count < blocks {
-		index, found := dmtool.blockbits.NextClear(uint(offset + 1))
+	for count < extents {
+		index, found := dmtool.extentbits.NextClear(uint(offset + 1))
 		if !found {
 			break
 		}
@@ -56,7 +56,7 @@ func findExtents(dmtool *DmTool, blocks, offset uint64) (uint64, uint64, uint64)
 			break
 		}
 
-		dmtool.blockbits.Set(index)
+		dmtool.extentbits.Set(index)
 
 		offset = uint64(index)
 		count++
@@ -67,7 +67,7 @@ func findExtents(dmtool *DmTool, blocks, offset uint64) (uint64, uint64, uint64)
 
 func setExtents(dmtool *DmTool, offset, count uint64) error {
 	for i := uint64(0); i < count; i++ {
-		dmtool.blockbits.Set(uint(offset + i + 1))
+		dmtool.extentbits.Set(uint(offset + i + 1))
 	}
 
 	return nil
@@ -75,7 +75,7 @@ func setExtents(dmtool *DmTool, offset, count uint64) error {
 
 func clearExtents(dmtool *DmTool, offset, count uint64) error {
 	for i := uint64(0); i < count; i++ {
-		dmtool.blockbits.Clear(uint(offset + i + 1))
+		dmtool.extentbits.Clear(uint(offset + i + 1))
 	}
 
 	return nil
@@ -141,13 +141,13 @@ func dmToolSetup(devpath string, extentsize uint64, jsonpath string) (*DmTool, e
 
 	devsize := getDeviceSize(devpath)
 	if devsize == 0 {
-		return nil, errors.New("%v block device is not available")
+		return nil, errors.New("%v extent device is not available")
 	}
 
 	log.Printf("overlit: prepare (devpath = %v, devsize = %v bytes, extentsize = %v bytes)\n", devpath, devsize, extentsize)
 
-	dmtool.nblocks = uint64(math.Ceil(float64(devsize / extentsize)))
-	dmtool.blockbits = bitset.New(uint(dmtool.nblocks))
+	dmtool.extents = uint64(math.Ceil(float64(devsize / extentsize)))
+	dmtool.extentbits = bitset.New(uint(dmtool.extents))
 
 	if jsondata, err := ioutil.ReadFile(jsonpath); err == nil {
 		if err := json.Unmarshal(jsondata, &dmtool); err != nil {
@@ -161,7 +161,7 @@ func dmToolSetup(devpath string, extentsize uint64, jsonpath string) (*DmTool, e
 
 					setExtents(dmtool, start, count)
 
-					dmtool.lastblock = start + count
+					dmtool.lastextent = start + count
 				}
 
 				if res := checkDevice(dmtool, devname); res == 0 {
@@ -220,10 +220,10 @@ func dmToolCreateDevice(dmtool *DmTool, name string, size uint64) error {
 	remains := uint64(math.Ceil(float64(size / dmtool.ExtentSize)))
 
 	for remains > 0 {
-		start, count, offset := findExtents(dmtool, getMinUint64(remains, 255), dmtool.lastblock)
+		start, count, offset := findExtents(dmtool, getMinUint64(remains, 255), dmtool.lastextent)
 		if count == 0 {
-			if offset >= dmtool.nblocks {
-				dmtool.lastblock = 0
+			if offset >= dmtool.extents {
+				dmtool.lastextent = 0
 				continue
 			}
 
@@ -233,7 +233,7 @@ func dmToolCreateDevice(dmtool *DmTool, name string, size uint64) error {
 		device.Targets = append(device.Targets, start<<8|count)
 		remains -= count
 
-		dmtool.lastblock = offset
+		dmtool.lastextent = offset
 	}
 
 	dmtool.Devices[name] = device
