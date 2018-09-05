@@ -8,15 +8,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"syscall"
-	"unsafe"
 
 	"github.com/pkg/errors"
 	"github.com/willf/bitset"
-)
-
-const (
-	blkGetSize64 = 0x80081272
 )
 
 type DmDevice struct {
@@ -42,21 +36,6 @@ func getTarget(target uint64) (start, count uint64) {
 	count = uint64(target & 0xff)
 
 	return
-}
-
-func getDeviceSize(devpath string) uint64 {
-	dev, err := os.Open(devpath)
-	if err != nil {
-		return 0
-	}
-	defer dev.Close()
-
-	size := uint64(0)
-	if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, dev.Fd(), blkGetSize64, uintptr(unsafe.Pointer(&size))); err != 0 {
-		return 0
-	}
-
-	return size
 }
 
 func findExtents(dmtool *DmTool, blocks, offset uint64) (uint64, uint64) {
@@ -236,7 +215,7 @@ func dmToolCreateDevice(dmtool *DmTool, name string, size uint64) error {
 	start := uint64(0)
 
 	for remains > 0 {
-		start, count := findExtents(dmtool, minUint64(remains, 255), start)
+		start, count := findExtents(dmtool, getMinUint64(remains, 255), start)
 		if count == 0 {
 			return errors.New("count not attach device")
 		}
