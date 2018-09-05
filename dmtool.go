@@ -24,6 +24,8 @@ type DmTool struct {
 	Devices    map[string]*DmDevice `json:"devices"`
 
 	blockbits *bitset.BitSet
+	nblocks   uint64
+	lastblock uint64
 
 	jsonpath string
 }
@@ -39,7 +41,7 @@ func getTarget(target uint64) (start, count uint64) {
 	return
 }
 
-func findExtents(dmtool *DmTool, blocks, offset uint64) (uint64, uint64) {
+func findExtents(dmtool *DmTool, blocks, offset uint64) (uint64, uint64, uint64) {
 	start := uint64(0)
 	count := uint64(0)
 
@@ -60,7 +62,7 @@ func findExtents(dmtool *DmTool, blocks, offset uint64) (uint64, uint64) {
 		count++
 	}
 
-	return start, count
+	return start, count, offset
 }
 
 func setExtents(dmtool *DmTool, offset, count uint64) error {
@@ -144,7 +146,8 @@ func dmToolSetup(devpath string, extentsize uint64, jsonpath string) (*DmTool, e
 
 	log.Printf("overlit: prepare (devpath = %v, devsize = %v bytes, extentsize = %v bytes)\n", devpath, devsize, extentsize)
 
-	dmtool.blockbits = bitset.New(uint(devsize / extentsize))
+	dmtool.nblocks = uint64(math.Ceil(float64(devsize / extentsize)))
+	dmtool.blockbits = bitset.New(uint(dmtool.nblocks))
 
 	if jsondata, err := ioutil.ReadFile(jsonpath); err == nil {
 		if err := json.Unmarshal(jsondata, &dmtool); err != nil {
@@ -157,6 +160,8 @@ func dmToolSetup(devpath string, extentsize uint64, jsonpath string) (*DmTool, e
 					start, count := getTarget(target)
 
 					setExtents(dmtool, start, count)
+
+					dmtool.lastblock = start + count
 				}
 
 				if res := checkDevice(dmtool, devname); res == 0 {
@@ -213,18 +218,22 @@ func dmToolCreateDevice(dmtool *DmTool, name string, size uint64) error {
 	device := &DmDevice{}
 
 	remains := uint64(math.Ceil(float64(size / dmtool.ExtentSize)))
-	start := uint64(0)
 
 	for remains > 0 {
-		start, count := findExtents(dmtool, getMinUint64(remains, 255), start)
+		start, count, offset := findExtents(dmtool, getMinUint64(remains, 255), dmtool.lastblock)
 		if count == 0 {
+			if offset >= dmtool.nblocks {
+				dmtool.lastblock = 0
+				continue
+			}
+
 			return errors.New("count not attach device")
 		}
 
 		device.Targets = append(device.Targets, start<<8|count)
-
 		remains -= count
-		start += count
+
+		dmtool.lastblock = offset
 	}
 
 	dmtool.Devices[name] = device
