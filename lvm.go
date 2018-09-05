@@ -31,7 +31,7 @@ func checkLVMDeviceReady(devname string) (bool, error) {
 	return true, nil
 }
 
-func createLVMDevice(devname string, groupname string, extentsize int64) error {
+func createLVMDevice(devname string, groupname string, extentsize uint64) error {
 	if out, err := exec.Command("pvcreate", "-f", devname).CombinedOutput(); err != nil {
 		return errors.Wrap(err, string(out))
 	}
@@ -43,7 +43,7 @@ func createLVMDevice(devname string, groupname string, extentsize int64) error {
 	return nil
 }
 
-func createLVMVolume(groupname string, volumename string, alloc string, size int64) error {
+func createLVMVolume(groupname string, volumename string, alloc string, size uint64) error {
 	if out, err := exec.Command("lvcreate", groupname, "-n", volumename, "--alloc", alloc, "-L", fmt.Sprintf("%dM", size)).CombinedOutput(); err != nil {
 		return errors.Wrap(err, string(out))
 	}

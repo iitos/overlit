@@ -2,24 +2,31 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
+	"syscall"
+	"unsafe"
 
 	"github.com/pkg/errors"
 	"github.com/willf/bitset"
 )
 
-type DmToolDevice struct {
-	DevName string   `json:"devname"`
+const (
+	blkGetSize64 = 0x80081272
+)
+
+type DmDevice struct {
 	Targets []uint64 `json:"targets"`
 }
 
 type DmTool struct {
-	DevPath    string         `json:"devpath"`
-	ExtentSize int64          `json:"extentsize"`
-	Devices    []DmToolDevice `json:"devices"`
+	DevPath    string               `json:"devpath"`
+	ExtentSize uint64               `json:"extentsize"`
+	Devices    map[string]*DmDevice `json:"devices"`
 
 	blockbits *bitset.BitSet
 
@@ -30,15 +37,116 @@ func init() {
 	dmUdevSetSyncSupport(1)
 }
 
-func dmToolPrepare(devpath string, extentsize int64, jsonpath string) (*DmTool, error) {
-	dmtool := &DmTool{}
-
-	fi, err := os.Stat(devpath)
+func getBlockDeviceSize(devpath string) uint64 {
+	dev, err := os.Open(devpath)
 	if err != nil {
-		return nil, errors.New("could not open a block device")
+		return 0
+	}
+	defer dev.Close()
+
+	size := uint64(0)
+	if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, dev.Fd(), blkGetSize64, uintptr(unsafe.Pointer(&size))); err != 0 {
+		return 0
 	}
 
-	dmtool.blockbits = bitset.New(uint(fi.Size() / extentsize))
+	return size
+}
+
+func getExtents(dmtool *DmTool, blocks, offset uint64) (uint64, uint64) {
+	start := uint64(0)
+	count := uint64(0)
+
+	for count < blocks {
+		index, found := dmtool.blockbits.NextClear(uint(offset + 1))
+		if !found {
+			break
+		}
+		if count == 0 {
+			start = uint64(index - 1)
+		} else if uint64(index) != offset+1 {
+			break
+		}
+
+		dmtool.blockbits.Set(index)
+
+		offset = uint64(index)
+		count++
+	}
+
+	return start, count
+}
+
+func setExtents(dmtool *DmTool, offset, count uint64) error {
+	for i := uint64(0); i < count; i++ {
+		dmtool.blockbits.Set(uint(offset + i + 1))
+	}
+
+	return nil
+}
+
+func putExtents(dmtool *DmTool, offset, count uint64) error {
+	for i := uint64(0); i < count; i++ {
+		dmtool.blockbits.Set(uint(offset + i + 1))
+	}
+
+	return nil
+}
+
+func addDevice(dmtool *DmTool, devname string) error {
+	var cookie uint
+
+	device := dmtool.Devices[devname]
+
+	multis := uint64(dmtool.ExtentSize * 1024 * 1024 / 512)
+
+	task := dmTaskCreate(deviceCreate)
+	dmTaskSetName(task, devname)
+
+	offset := uint64(0)
+
+	for _, target := range device.Targets {
+		start := uint64(target >> 8)
+		count := uint64(target & 0xff)
+
+		dmTaskAddTarget(task, offset*multis, count*multis, "linear", fmt.Sprintf("%v %v", dmtool.DevPath, start*multis))
+
+		offset += count
+	}
+
+	dmTaskSetCookie(task, &cookie, 0)
+	dmTaskRun(task)
+	dmTaskDestroy(task)
+
+	dmUdevWait(cookie)
+
+	return nil
+}
+
+func deleteDevice(dmtool *DmTool, devname string) error {
+	var cookie uint
+
+	task := dmTaskCreate(deviceRemove)
+	dmTaskSetName(task, devname)
+	dmTaskSetCookie(task, &cookie, 0)
+	dmTaskRun(task)
+	dmTaskDestroy(task)
+
+	dmUdevWait(cookie)
+
+	return nil
+}
+
+func dmToolPrepare(devpath string, extentsize uint64, jsonpath string) (*DmTool, error) {
+	dmtool := &DmTool{Devices: make(map[string]*DmDevice)}
+
+	devsize := getBlockDeviceSize(devpath)
+	if devsize == 0 {
+		return nil, errors.New("%v block device is not available")
+	}
+
+	log.Printf("overlit: prepare (devpath = %v, devsize = %v mbytes, extentsize = %v mbytes)\n", devpath, devsize/1024/1024, extentsize)
+
+	dmtool.blockbits = bitset.New(uint(devsize) / uint(extentsize*1024*1024))
 
 	if jsondata, err := ioutil.ReadFile(jsonpath); err == nil {
 		if err := json.Unmarshal(jsondata, &dmtool); err != nil {
@@ -92,15 +200,31 @@ func dmToolFlush(dmtool *DmTool) error {
 	return nil
 }
 
-func dmToolAddDevice(dmtool *DmTool, name string) {
-	var cookie uint
+func dmToolAddDevice(dmtool *DmTool, name string, size uint64) error {
+	device := &DmDevice{}
 
-	task := dmTaskCreate(deviceCreate)
-	dmTaskSetName(task, name)
-	dmTaskAddTarget(task, 0, 4, "linear", "/dev/sdb1 2")
-	dmTaskSetCookie(task, &cookie, 0)
-	dmTaskRun(task)
-	dmTaskDestroy(task)
+	remains := size / (dmtool.ExtentSize * 1024 * 1024)
+	offset := uint64(0)
+	start := uint64(0)
 
-	dmUdevWait(cookie)
+	for remains > 0 {
+		start, count := getExtents(dmtool, minUint64(remains, 255), start)
+		if count == 0 {
+			return errors.New("count not add device")
+		}
+
+		device.Targets = append(device.Targets, start<<8|count)
+
+		remains -= count
+		offset += count
+		start = start + count
+	}
+
+	dmtool.Devices[name] = device
+
+	return addDevice(dmtool, name)
+}
+
+func dmToolDeleteDevice(dmtool *DmTool, name string) error {
+	return deleteDevice(dmtool, name)
 }
