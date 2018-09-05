@@ -59,7 +59,7 @@ func getBlockDeviceSize(devpath string) uint64 {
 	return size
 }
 
-func getExtents(dmtool *DmTool, blocks, offset uint64) (uint64, uint64) {
+func findExtents(dmtool *DmTool, blocks, offset uint64) (uint64, uint64) {
 	start := uint64(0)
 	count := uint64(0)
 
@@ -91,9 +91,9 @@ func setExtents(dmtool *DmTool, offset, count uint64) error {
 	return nil
 }
 
-func putExtents(dmtool *DmTool, offset, count uint64) error {
+func clearExtents(dmtool *DmTool, offset, count uint64) error {
 	for i := uint64(0); i < count; i++ {
-		dmtool.blockbits.Set(uint(offset + i + 1))
+		dmtool.blockbits.Clear(uint(offset + i + 1))
 	}
 
 	return nil
@@ -237,7 +237,7 @@ func dmToolAddDevice(dmtool *DmTool, name string, size uint64) error {
 	start := uint64(0)
 
 	for remains > 0 {
-		start, count := getExtents(dmtool, minUint64(remains, 255), start)
+		start, count := findExtents(dmtool, minUint64(remains, 255), start)
 		if count == 0 {
 			return errors.New("count not add device")
 		}
@@ -260,7 +260,7 @@ func dmToolDeleteDevice(dmtool *DmTool, name string) error {
 	for _, target := range device.Targets {
 		start, count := getTarget(target)
 
-		putExtents(dmtool, start, count)
+		clearExtents(dmtool, start, count)
 	}
 
 	return deleteDevice(dmtool, name)
