@@ -99,7 +99,7 @@ func clearExtents(dmtool *DmTool, offset, count uint64) error {
 	return nil
 }
 
-func addDevice(dmtool *DmTool, devname string) error {
+func attachDevice(dmtool *DmTool, devname string) error {
 	var cookie uint
 
 	device := dmtool.Devices[devname]
@@ -128,7 +128,7 @@ func addDevice(dmtool *DmTool, devname string) error {
 	return nil
 }
 
-func deleteDevice(dmtool *DmTool, devname string) error {
+func detachDevice(dmtool *DmTool, devname string) error {
 	var cookie uint
 
 	task := dmTaskCreate(deviceRemove)
@@ -180,7 +180,7 @@ func dmToolSetup(devpath string, extentsize uint64, jsonpath string) (*DmTool, e
 				}
 
 				if res := checkDevice(dmtool, devname); res == 0 {
-					addDevice(dmtool, devname)
+					attachDevice(dmtool, devname)
 				}
 			}
 		}
@@ -229,29 +229,27 @@ func dmToolFlush(dmtool *DmTool) error {
 	return nil
 }
 
-func dmToolAddDevice(dmtool *DmTool, name string, size uint64) error {
+func dmToolCreateDevice(dmtool *DmTool, name string, size uint64) error {
 	device := &DmDevice{}
 
 	remains := size / (dmtool.ExtentSize * 1024 * 1024)
-	offset := uint64(0)
 	start := uint64(0)
 
 	for remains > 0 {
 		start, count := findExtents(dmtool, minUint64(remains, 255), start)
 		if count == 0 {
-			return errors.New("count not add device")
+			return errors.New("count not attach device")
 		}
 
 		device.Targets = append(device.Targets, start<<8|count)
 
 		remains -= count
-		offset += count
-		start = start + count
+		start += count
 	}
 
 	dmtool.Devices[name] = device
 
-	return addDevice(dmtool, name)
+	return attachDevice(dmtool, name)
 }
 
 func dmToolDeleteDevice(dmtool *DmTool, name string) error {
@@ -263,5 +261,5 @@ func dmToolDeleteDevice(dmtool *DmTool, name string) error {
 		clearExtents(dmtool, start, count)
 	}
 
-	return deleteDevice(dmtool, name)
+	return detachDevice(dmtool, name)
 }
