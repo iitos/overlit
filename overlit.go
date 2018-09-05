@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 
 	"github.com/docker/docker/daemon/graphdriver"
@@ -20,6 +19,7 @@ import (
 	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/docker/docker/pkg/system"
+	"github.com/docker/go-units"
 	"github.com/pkg/errors"
 
 	graphhelper "github.com/docker/go-plugins-helpers/graphdriver"
@@ -71,7 +71,8 @@ func parseOptions(options []string) (*overlitOptions, error) {
 		case "groupname":
 			opts.GroupName = val
 		case "extentsize":
-			opts.ExtentSize, err = strconv.ParseUint(val, 10, 64)
+			size, _ := units.RAMInBytes(val)
+			opts.ExtentSize = uint64(size)
 		default:
 			return nil, fmt.Errorf("overlit: Unknown option (%s = %s)", key, val)
 		}
