@@ -207,7 +207,7 @@ func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []i
 		return err
 	}
 
-	dmtool, err := dmToolPrepare(d.options.DevName, d.options.ExtentSize, fmt.Sprintf("%v/dmtool.json", d.home))
+	dmtool, err := dmToolSetup(d.options.DevName, d.options.ExtentSize, fmt.Sprintf("%v/dmtool.json", d.home))
 	if err != nil {
 		return err
 	}

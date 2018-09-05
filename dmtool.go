@@ -44,7 +44,7 @@ func getTarget(target uint64) (start, count uint64) {
 	return
 }
 
-func getBlockDeviceSize(devpath string) uint64 {
+func getDeviceSize(devpath string) uint64 {
 	dev, err := os.Open(devpath)
 	if err != nil {
 		return 0
@@ -154,10 +154,10 @@ func checkDevice(dmtool *DmTool, devname string) int {
 	return info.Exists
 }
 
-func dmToolPrepare(devpath string, extentsize uint64, jsonpath string) (*DmTool, error) {
+func dmToolSetup(devpath string, extentsize uint64, jsonpath string) (*DmTool, error) {
 	dmtool := &DmTool{Devices: make(map[string]*DmDevice)}
 
-	devsize := getBlockDeviceSize(devpath)
+	devsize := getDeviceSize(devpath)
 	if devsize == 0 {
 		return nil, errors.New("%v block device is not available")
 	}
