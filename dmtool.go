@@ -37,6 +37,13 @@ func init() {
 	dmUdevSetSyncSupport(1)
 }
 
+func getTarget(target uint64) (start, count uint64) {
+	start = uint64(target >> 8)
+	count = uint64(target & 0xff)
+
+	return
+}
+
 func getBlockDeviceSize(devpath string) uint64 {
 	dev, err := os.Open(devpath)
 	if err != nil {
@@ -105,8 +112,7 @@ func addDevice(dmtool *DmTool, devname string) error {
 	offset := uint64(0)
 
 	for _, target := range device.Targets {
-		start := uint64(target >> 8)
-		count := uint64(target & 0xff)
+		start, count := getTarget(target)
 
 		dmTaskAddTarget(task, offset*multis, count*multis, "linear", fmt.Sprintf("%v %v", dmtool.DevPath, start*multis))
 
@@ -168,8 +174,7 @@ func dmToolPrepare(devpath string, extentsize uint64, jsonpath string) (*DmTool,
 		if dmtool.DevPath == devpath && dmtool.ExtentSize == extentsize {
 			for devname, device := range dmtool.Devices {
 				for _, target := range device.Targets {
-					start := uint64(target >> 8)
-					count := uint64(target & 0xff)
+					start, count := getTarget(target)
 
 					setExtents(dmtool, start, count)
 				}
@@ -253,8 +258,7 @@ func dmToolDeleteDevice(dmtool *DmTool, name string) error {
 	device := dmtool.Devices[name]
 
 	for _, target := range device.Targets {
-		start := uint64(target >> 8)
-		count := uint64(target & 0xff)
+		start, count := getTarget(target)
 
 		putExtents(dmtool, start, count)
 	}
