@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 
@@ -143,7 +144,7 @@ func dmToolSetup(devpath string, extentsize uint64, jsonpath string) (*DmTool, e
 
 	log.Printf("overlit: prepare (devpath = %v, devsize = %v bytes, extentsize = %v bytes)\n", devpath, devsize, extentsize)
 
-	dmtool.blockbits = bitset.New(uint(devsize) / uint(extentsize))
+	dmtool.blockbits = bitset.New(uint(devsize / extentsize))
 
 	if jsondata, err := ioutil.ReadFile(jsonpath); err == nil {
 		if err := json.Unmarshal(jsondata, &dmtool); err != nil {
@@ -211,7 +212,7 @@ func dmToolFlush(dmtool *DmTool) error {
 func dmToolCreateDevice(dmtool *DmTool, name string, size uint64) error {
 	device := &DmDevice{}
 
-	remains := size / dmtool.ExtentSize
+	remains := uint64(math.Ceil(float64(size / dmtool.ExtentSize)))
 	start := uint64(0)
 
 	for remains > 0 {
