@@ -20,14 +20,16 @@ func main() {
 	var extentSize string
 	var rofsType string
 	var rofsRate float64
-	var rofsCmds string
+	var rofsCmd0 string
+	var rofsCmd1 string
 
 	flag.StringVar(&devName, "devname", "_", "devmapper device name")
 	flag.StringVar(&groupName, "groupname", "docker", "devmapper group name")
 	flag.StringVar(&extentSize, "extentsize", "4M", "devmapper extent size")
 	flag.StringVar(&rofsType, "rofstype", "raonfs", "filesystem type for read-only layer")
 	flag.Float64Var(&rofsRate, "rofsrate", 1.2, "filesystem rate for read-only layer")
-	flag.StringVar(&rofsCmds, "rofscmds", "mkraonfs.py,-s,{tars},-t,{dev}", "commands for read-only layer")
+	flag.StringVar(&rofsCmd0, "rofscmd0", "mkraonfs.py,-s,{tars},-t,{dev}", "precommands for read-only layer")
+	flag.StringVar(&rofsCmd1, "rofscmd1", "", "postcommands for read-only layer")
 	flag.Parse()
 
 	options := []string{}
@@ -36,7 +38,8 @@ func main() {
 	options = append(options, fmt.Sprintf("extentsize=%s", extentSize))
 	options = append(options, fmt.Sprintf("rofstype=%s", rofsType))
 	options = append(options, fmt.Sprintf("rofsrate=%f", rofsRate))
-	options = append(options, fmt.Sprintf("rofscmds=%s", rofsCmds))
+	options = append(options, fmt.Sprintf("rofscmd0=%s", rofsCmd0))
+	options = append(options, fmt.Sprintf("rofscmd1=%s", rofsCmd1))
 
 	d, err := NewOverlitDriver(options)
 	if err != nil {

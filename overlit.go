@@ -46,7 +46,8 @@ type overlitOptions struct {
 	ExtentSize uint64
 	RofsType   string
 	RofsRate   float64
-	RofsCmds   string
+	RofsCmd0   string
+	RofsCmd1   string
 }
 
 type overlitDriver struct {
@@ -83,8 +84,10 @@ func parseOptions(options []string) (*overlitOptions, error) {
 			opts.RofsType = val
 		case "rofsrate":
 			opts.RofsRate, _ = strconv.ParseFloat(val, 64)
-		case "rofscmds":
-			opts.RofsCmds = val
+		case "rofscmd0":
+			opts.RofsCmd0 = val
+		case "rofscmd1":
+			opts.RofsCmd1 = val
 		default:
 			return nil, fmt.Errorf("overlit: Unknown option (%s = %s)", key, val)
 		}
@@ -153,6 +156,21 @@ func (d *overlitDriver) getLowerDirs(id string) ([]string, error) {
 		return nil, err
 	}
 	return lowersArray, nil
+}
+
+func (d *overlitDriver) execCommands(cmds string) error {
+	for _, cmd := range strings.Split(cmds, ":") {
+		args := strings.Split(cmd, ",")
+		if len(args[0]) == 0 {
+			continue
+		}
+
+		if err := exec.Command(args[0], args[1:]...).Run(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (d *overlitDriver) create(id, parent string) (retErr error) {
@@ -516,20 +534,23 @@ func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, err
 		return 0, err
 	}
 
-	cmds := d.options.RofsCmds
-	cmds = strings.Replace(cmds, "{tars}", tarsPath, -1)
-	cmds = strings.Replace(cmds, "{diff}", diffPath, -1)
-	cmds = strings.Replace(cmds, "{dev}", devPath, -1)
-
-	for _, cmd := range strings.Split(cmds, ":") {
-		args := strings.Split(cmd, ",")
-
-		if err := exec.Command(args[0], args[1:]...).Run(); err != nil {
-			return 0, err
-		}
+	cmd0 := d.options.RofsCmd0
+	cmd0 = strings.Replace(cmd0, "{tars}", tarsPath, -1)
+	cmd0 = strings.Replace(cmd0, "{diff}", diffPath, -1)
+	cmd0 = strings.Replace(cmd0, "{dev}", devPath, -1)
+	if err := d.execCommands(cmd0); err != nil {
+		return 0, err
 	}
 
 	if err := unix.Mount(devPath, diffPath, d.options.RofsType, 0, id); err != nil {
+		return 0, err
+	}
+
+	cmd1 := d.options.RofsCmd1
+	cmd1 = strings.Replace(cmd1, "{tars}", tarsPath, -1)
+	cmd1 = strings.Replace(cmd1, "{diff}", diffPath, -1)
+	cmd1 = strings.Replace(cmd1, "{dev}", devPath, -1)
+	if err := d.execCommands(cmd1); err != nil {
 		return 0, err
 	}
 
