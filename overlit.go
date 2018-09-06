@@ -6,7 +6,9 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"os"
+	"os/exec"
 	"path"
 	"strings"
 
@@ -91,20 +93,30 @@ func (d *overlitDriver) getDiffPath(id string) string {
 	return path.Join(dir, "diff")
 }
 
-func (d *overlitDriver) getLowerPath(parent string) (string, error) {
-	parentDir := d.getHomePath(parent)
+func (d *overlitDriver) getTempPath(id string) string {
+	dir := d.getHomePath(id)
 
-	if _, err := os.Lstat(parentDir); err != nil {
+	return path.Join(dir, "temp")
+}
+
+func (d *overlitDriver) getDevPath(id string) string {
+	return path.Join("/dev/mapper", id)
+}
+
+func (d *overlitDriver) getLowerPath(parent string) (string, error) {
+	parentPath := d.getHomePath(parent)
+
+	if _, err := os.Lstat(parentPath); err != nil {
 		return "", err
 	}
 
-	parentLink, err := ioutil.ReadFile(path.Join(parentDir, "link"))
+	parentLink, err := ioutil.ReadFile(path.Join(parentPath, "link"))
 	if err != nil {
 		return "", err
 	}
 	lowers := []string{path.Join(linkDir, string(parentLink))}
 
-	parentLower, err := ioutil.ReadFile(path.Join(parentDir, lowerFile))
+	parentLower, err := ioutil.ReadFile(path.Join(parentPath, lowerFile))
 	if err == nil {
 		parentLowers := strings.Split(string(parentLower), ":")
 		lowers = append(lowers, parentLowers...)
@@ -162,6 +174,10 @@ func (d *overlitDriver) create(id, parent string) (retErr error) {
 	}
 
 	if err := os.Symlink(path.Join("..", id, "diff"), path.Join(d.home, linkDir, lid)); err != nil {
+		return err
+	}
+
+	if err := idtools.MkdirAndChown(path.Join(dir, "temp"), 0755, root); err != nil {
 		return err
 	}
 
@@ -239,7 +255,9 @@ func (d *overlitDriver) Remove(id string) error {
 
 	d.locker.Lock(id)
 	defer d.locker.Unlock(id)
+
 	dir := d.getHomePath(id)
+
 	lid, err := ioutil.ReadFile(path.Join(dir, "link"))
 	if err == nil {
 		if err := os.RemoveAll(path.Join(d.home, linkDir, string(lid))); err != nil {
@@ -247,9 +265,18 @@ func (d *overlitDriver) Remove(id string) error {
 		}
 	}
 
+	diffPath := d.getDiffPath(id)
+
+	if err := unix.Unmount(diffPath, unix.MNT_DETACH); err != nil {
+		log.Printf("overlit: failed to unmount diff: %v", err)
+	}
+
 	if err := system.EnsureRemoveAll(dir); err != nil && !os.IsNotExist(err) {
 		return err
 	}
+
+	d.dmtool.DeleteDevice(id)
+
 	return nil
 }
 
@@ -264,26 +291,26 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 		return nil, err
 	}
 
-	diffDir := path.Join(dir, "diff")
+	diffPath := path.Join(dir, "diff")
 	lowers, err := ioutil.ReadFile(path.Join(dir, lowerFile))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return containerfs.NewLocalContainerFS(diffDir), nil
+			return containerfs.NewLocalContainerFS(diffPath), nil
 		}
 		return nil, err
 	}
 
-	mergedDir := path.Join(dir, "merged")
-	if count := d.ctr.Increment(mergedDir); count > 1 {
-		return containerfs.NewLocalContainerFS(mergedDir), nil
+	mergedPath := path.Join(dir, "merged")
+	if count := d.ctr.Increment(mergedPath); count > 1 {
+		return containerfs.NewLocalContainerFS(mergedPath), nil
 	}
 	defer func() {
 		if retErr != nil {
-			if c := d.ctr.Decrement(mergedDir); c <= 0 {
-				if mntErr := unix.Unmount(mergedDir, 0); mntErr != nil {
-					log.Printf("overlit: failed to mount %v: %v", mergedDir, mntErr)
+			if c := d.ctr.Decrement(mergedPath); c <= 0 {
+				if mntErr := unix.Unmount(mergedPath, 0); mntErr != nil {
+					log.Printf("overlit: failed to mount %v: %v", mergedPath, mntErr)
 				}
-				if rmErr := unix.Rmdir(mergedDir); rmErr != nil && !os.IsNotExist(rmErr) {
+				if rmErr := unix.Rmdir(mergedPath); rmErr != nil && !os.IsNotExist(rmErr) {
 					log.Printf("overlit: failed to remove %s: %v, %v", id, rmErr, err)
 				}
 			}
@@ -299,13 +326,13 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 	opts := fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", strings.Join(absLowers, ":"), path.Join(dir, "diff"), path.Join(dir, "work"))
 	mountData := label.FormatMountLabel(opts, mountLabel)
 	mount := unix.Mount
-	mountTarget := mergedDir
+	mountTarget := mergedPath
 
 	rootUID, rootGID, err := idtools.GetRootUIDGID(d.uidMaps, d.gidMaps)
 	if err != nil {
 		return nil, err
 	}
-	if err := idtools.MkdirAndChown(mergedDir, 0700, idtools.Identity{UID: rootUID, GID: rootGID}); err != nil {
+	if err := idtools.MkdirAndChown(mergedPath, 0700, idtools.Identity{UID: rootUID, GID: rootGID}); err != nil {
 		return nil, err
 	}
 
@@ -329,14 +356,14 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 	}
 
 	if err := mount("overlay", mountTarget, "overlay", 0, mountData); err != nil {
-		return nil, errors.Errorf("error creating overlay mount to %s: %v", mergedDir, err)
+		return nil, errors.Errorf("error creating overlay mount to %s: %v", mergedPath, err)
 	}
 
 	if err := os.Chown(path.Join(workDir, "work"), rootUID, rootGID); err != nil {
 		return nil, err
 	}
 
-	return containerfs.NewLocalContainerFS(mergedDir), nil
+	return containerfs.NewLocalContainerFS(mergedPath), nil
 }
 
 func (d *overlitDriver) Put(id string) error {
@@ -460,7 +487,9 @@ func (d *overlitDriver) Changes(id, parent string) ([]graphhelper.Change, error)
 func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, error) {
 	log.Printf("overlit: applydiff (id = %s, parent = %s)\n", id, parent)
 
-	applyDir := d.getDiffPath(id)
+	tempPath := d.getTempPath(id)
+	diffPath := d.getDiffPath(id)
+	devPath := d.getDevPath(id)
 
 	options := &archive.TarOptions{
 		UIDMaps:        d.uidMaps,
@@ -469,8 +498,23 @@ func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, err
 		InUserNS:       rsystem.RunningInUserNS(),
 	}
 
-	size, err := archive.ApplyUncompressedLayer(applyDir, diff, options)
+	size, err := archive.ApplyUncompressedLayer(tempPath, diff, options)
 	if err != nil {
+		return 0, err
+	}
+
+	d.dmtool.CreateDevice(id, uint64(math.Ceil(float64(size)*1.5)))
+
+	mkraonfs, err := exec.LookPath("mkraonfs.py")
+	if err != nil {
+		return 0, err
+	}
+
+	if _, err := exec.Command(mkraonfs, "-s", tempPath, "-t", devPath).CombinedOutput(); err != nil {
+		return 0, err
+	}
+
+	if err := unix.Mount(devPath, diffPath, "raonfs", 0, id); err != nil {
 		return 0, err
 	}
 
