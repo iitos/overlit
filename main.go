@@ -17,17 +17,17 @@ const (
 func main() {
 	var devName string
 	var groupName string
-	var extentSize int
+	var extentSize string
 
 	flag.StringVar(&devName, "devname", "_", "devmapper device name")
 	flag.StringVar(&groupName, "groupname", "docker", "devmapper group name")
-	flag.IntVar(&extentSize, "extentsize", 4, "devmapper extent size (mbytes)")
+	flag.StringVar(&extentSize, "extentsize", "4M", "devmapper extent size")
 	flag.Parse()
 
 	options := []string{}
 	options = append(options, fmt.Sprintf("devname=%s", devName))
 	options = append(options, fmt.Sprintf("groupname=%s", groupName))
-	options = append(options, fmt.Sprintf("extentsize=%d", extentSize))
+	options = append(options, fmt.Sprintf("extentsize=%s", extentSize))
 
 	d, err := newOverlitDriver(options)
 	if err != nil {
