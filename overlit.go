@@ -170,6 +170,16 @@ func (d *overlitDriver) getLowerDirs(id string) ([]string, error) {
 	return lowersArray, nil
 }
 
+func (d *overlitDriver) getRootIdentity() (idtools.Identity, int, int, error) {
+	rootUID, rootGID, err := idtools.GetRootUIDGID(d.uidMaps, d.gidMaps)
+	if err != nil {
+		return idtools.Identity{}, 0, 0, err
+	}
+	root := idtools.Identity{UID: rootUID, GID: rootGID}
+
+	return root, rootUID, rootGID, nil
+}
+
 func (d *overlitDriver) execCommands(cmds string) error {
 	for _, cmd := range strings.Split(cmds, ":") {
 		args := strings.Split(cmd, ",")
@@ -192,11 +202,10 @@ func (d *overlitDriver) create(id, parent, fstype string) (rerr error) {
 	linkPath := d.getLinkPath(id)
 	workPath := d.getWorkPath(id)
 
-	rootUID, rootGID, err := idtools.GetRootUIDGID(d.uidMaps, d.gidMaps)
+	root, _, _, err := d.getRootIdentity()
 	if err != nil {
 		return err
 	}
-	root := idtools.Identity{UID: rootUID, GID: rootGID}
 
 	if err := idtools.MkdirAllAndChown(path.Dir(dir), 0700, root); err != nil {
 		return err
@@ -272,11 +281,11 @@ func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []i
 	d.ctr = graphdriver.NewRefCounter(graphdriver.NewFsChecker(graphdriver.FsMagicOverlay))
 	d.locker = locker.New()
 
-	rootUID, rootGID, err := idtools.GetRootUIDGID(uidMaps, gidMaps)
+	root, _, _, err := d.getRootIdentity()
 	if err != nil {
 		return err
 	}
-	if err := idtools.MkdirAllAndChown(path.Join(home, linkDir), 0700, idtools.Identity{UID: rootUID, GID: rootGID}); err != nil {
+	if err := idtools.MkdirAllAndChown(path.Join(home, linkDir), 0700, root); err != nil {
 		return err
 	}
 
@@ -397,11 +406,11 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 	mount := unix.Mount
 	mountTarget := mergedPath
 
-	rootUID, rootGID, err := idtools.GetRootUIDGID(d.uidMaps, d.gidMaps)
+	root, rootUID, rootGID, err := d.getRootIdentity()
 	if err != nil {
 		return nil, err
 	}
-	if err := idtools.MkdirAndChown(mergedPath, 0700, idtools.Identity{UID: rootUID, GID: rootGID}); err != nil {
+	if err := idtools.MkdirAndChown(mergedPath, 0700, root); err != nil {
 		return nil, err
 	}
 
