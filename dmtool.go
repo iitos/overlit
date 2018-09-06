@@ -215,7 +215,7 @@ func (d *DmTool) Flush() error {
 func (d *DmTool) CreateDevice(name string, size uint64) error {
 	device := &DmDevice{}
 
-	remains := uint64(math.Ceil(float64(size / d.ExtentSize)))
+	remains := getMaxUint64(uint64(math.Ceil(float64(size/d.ExtentSize))), 1)
 
 	for remains > 0 {
 		start, count, offset := findExtents(d, getMinUint64(remains, 255), d.lastextent)

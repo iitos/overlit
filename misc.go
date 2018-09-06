@@ -16,6 +16,14 @@ func getMinUint64(a, b uint64) uint64 {
 	return a
 }
 
+func getMaxUint64(a, b uint64) uint64 {
+	if a > b {
+		return a
+	}
+
+	return b
+}
+
 func getDeviceSize(devpath string) uint64 {
 	dev, err := os.Open(devpath)
 	if err != nil {
