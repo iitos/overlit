@@ -29,7 +29,7 @@ func main() {
 	options = append(options, fmt.Sprintf("groupname=%s", groupName))
 	options = append(options, fmt.Sprintf("extentsize=%s", extentSize))
 
-	d, err := newOverlitDriver(options)
+	d, err := NewOverlitDriver(options)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

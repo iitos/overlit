@@ -208,12 +208,9 @@ func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []i
 		return err
 	}
 
-	dmtool, err := dmToolSetup(d.options.DevName, d.options.ExtentSize, fmt.Sprintf("%v/dmtool.json", d.home))
-	if err != nil {
+	if err := d.dmtool.Setup(d.options.DevName, d.options.ExtentSize, fmt.Sprintf("%v/dmtool.json", d.home)); err != nil {
 		return err
 	}
-
-	d.dmtool = dmtool
 
 	return nil
 }
@@ -413,7 +410,7 @@ func (d *overlitDriver) GetMetadata(id string) (map[string]string, error) {
 func (d *overlitDriver) Cleanup() error {
 	log.Printf("overlit: cleanup\n")
 
-	dmToolCleanup(d.dmtool)
+	d.dmtool.Cleanup()
 
 	return mount.RecursiveUnmount(d.home)
 }
@@ -492,7 +489,7 @@ func (d *overlitDriver) Capabilities() graphdriver.Capabilities {
 	return graphdriver.Capabilities{}
 }
 
-func newOverlitDriver(options []string) (*overlitDriver, error) {
+func NewOverlitDriver(options []string) (*overlitDriver, error) {
 	log.Printf("overlit: createDriver ()\n")
 
 	opts, err := parseOptions(options)
@@ -502,6 +499,7 @@ func newOverlitDriver(options []string) (*overlitDriver, error) {
 
 	d := &overlitDriver{}
 	d.options = *opts
+	d.dmtool = NewDmTool()
 
 	// Check if overlayfs is available
 	if err := checkOverlayFSAvailable(); err != nil {

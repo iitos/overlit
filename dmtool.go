@@ -41,12 +41,12 @@ func getTarget(target uint64) (start, count uint64) {
 	return
 }
 
-func findExtents(dmtool *DmTool, extents, offset uint64) (uint64, uint64, uint64) {
+func findExtents(d *DmTool, extents, offset uint64) (uint64, uint64, uint64) {
 	start := uint64(0)
 	count := uint64(0)
 
 	for count < extents {
-		index, found := dmtool.extentbits.NextClear(uint(offset + 1))
+		index, found := d.extentbits.NextClear(uint(offset + 1))
 		if !found {
 			break
 		}
@@ -56,7 +56,7 @@ func findExtents(dmtool *DmTool, extents, offset uint64) (uint64, uint64, uint64
 			break
 		}
 
-		dmtool.extentbits.Set(index)
+		d.extentbits.Set(index)
 
 		offset = uint64(index)
 		count++
@@ -65,28 +65,28 @@ func findExtents(dmtool *DmTool, extents, offset uint64) (uint64, uint64, uint64
 	return start, count, offset
 }
 
-func setExtents(dmtool *DmTool, offset, count uint64) error {
+func setExtents(d *DmTool, offset, count uint64) error {
 	for i := uint64(0); i < count; i++ {
-		dmtool.extentbits.Set(uint(offset + i + 1))
+		d.extentbits.Set(uint(offset + i + 1))
 	}
 
 	return nil
 }
 
-func clearExtents(dmtool *DmTool, offset, count uint64) error {
+func clearExtents(d *DmTool, offset, count uint64) error {
 	for i := uint64(0); i < count; i++ {
-		dmtool.extentbits.Clear(uint(offset + i + 1))
+		d.extentbits.Clear(uint(offset + i + 1))
 	}
 
 	return nil
 }
 
-func attachDevice(dmtool *DmTool, devname string) error {
+func attachDevice(d *DmTool, devname string) error {
 	var cookie uint
 
-	device := dmtool.Devices[devname]
+	device := d.Devices[devname]
 
-	multis := uint64(dmtool.ExtentSize / 512)
+	multis := uint64(d.ExtentSize / 512)
 
 	task := dmTaskCreate(deviceCreate)
 	dmTaskSetName(task, devname)
@@ -96,7 +96,7 @@ func attachDevice(dmtool *DmTool, devname string) error {
 	for _, target := range device.Targets {
 		start, count := getTarget(target)
 
-		dmTaskAddTarget(task, offset*multis, count*multis, "linear", fmt.Sprintf("%v %v", dmtool.DevPath, start*multis))
+		dmTaskAddTarget(task, offset*multis, count*multis, "linear", fmt.Sprintf("%v %v", d.DevPath, start*multis))
 
 		offset += count
 	}
@@ -110,7 +110,7 @@ func attachDevice(dmtool *DmTool, devname string) error {
 	return nil
 }
 
-func detachDevice(dmtool *DmTool, devname string) error {
+func detachDevice(d *DmTool, devname string) error {
 	var cookie uint
 
 	task := dmTaskCreate(deviceRemove)
@@ -124,7 +124,7 @@ func detachDevice(dmtool *DmTool, devname string) error {
 	return nil
 }
 
-func checkDevice(dmtool *DmTool, devname string) int {
+func checkDevice(d *DmTool, devname string) int {
 	info := &DmInfo{}
 
 	task := dmTaskCreate(deviceInfo)
@@ -136,60 +136,58 @@ func checkDevice(dmtool *DmTool, devname string) int {
 	return info.Exists
 }
 
-func dmToolSetup(devpath string, extentsize uint64, jsonpath string) (*DmTool, error) {
-	dmtool := &DmTool{Devices: make(map[string]*DmDevice)}
-
+func (d *DmTool) Setup(devpath string, extentsize uint64, jsonpath string) error {
 	devsize := getDeviceSize(devpath)
 	if devsize == 0 {
-		return nil, errors.New("%v extent device is not available")
+		return errors.New("%v extent device is not available")
 	}
 
 	log.Printf("overlit: prepare (devpath = %v, devsize = %v bytes, extentsize = %v bytes)\n", devpath, devsize, extentsize)
 
-	dmtool.extents = uint64(math.Ceil(float64(devsize / extentsize)))
-	dmtool.extentbits = bitset.New(uint(dmtool.extents))
+	d.extents = uint64(math.Ceil(float64(devsize / extentsize)))
+	d.extentbits = bitset.New(uint(d.extents))
 
 	if jsondata, err := ioutil.ReadFile(jsonpath); err == nil {
-		if err := json.Unmarshal(jsondata, &dmtool); err != nil {
-			return nil, errors.New("could not parse json config")
+		if err := json.Unmarshal(jsondata, &d); err != nil {
+			return errors.New("could not parse json config")
 		}
 
-		if dmtool.DevPath == devpath && dmtool.ExtentSize == extentsize {
-			for devname, device := range dmtool.Devices {
+		if d.DevPath == devpath && d.ExtentSize == extentsize {
+			for devname, device := range d.Devices {
 				for _, target := range device.Targets {
 					start, count := getTarget(target)
 
-					setExtents(dmtool, start, count)
+					setExtents(d, start, count)
 
-					dmtool.lastextent = start + count
+					d.lastextent = start + count
 				}
 
-				if res := checkDevice(dmtool, devname); res == 0 {
-					attachDevice(dmtool, devname)
+				if res := checkDevice(d, devname); res == 0 {
+					attachDevice(d, devname)
 				}
 			}
 		}
 	}
 
-	dmtool.DevPath = devpath
-	dmtool.ExtentSize = extentsize
+	d.DevPath = devpath
+	d.ExtentSize = extentsize
 
-	dmtool.jsonpath = jsonpath
+	d.jsonpath = jsonpath
 
-	return dmtool, nil
+	return nil
 }
 
-func dmToolCleanup(dmtool *DmTool) {
-	dmToolFlush(dmtool)
+func (d *DmTool) Cleanup() {
+	d.Flush()
 }
 
-func dmToolFlush(dmtool *DmTool) error {
-	jsondata, err := json.Marshal(dmtool)
+func (d *DmTool) Flush() error {
+	jsondata, err := json.Marshal(d)
 	if err != nil {
 		return errors.New("could not encode json config")
 	}
 
-	tmpfile, err := ioutil.TempFile(filepath.Dir(dmtool.jsonpath), ".tmp")
+	tmpfile, err := ioutil.TempFile(filepath.Dir(d.jsonpath), ".tmp")
 	if err != nil {
 		return errors.New("could not create temp file for json config")
 	}
@@ -207,23 +205,23 @@ func dmToolFlush(dmtool *DmTool) error {
 	if err := tmpfile.Close(); err != nil {
 		return errors.New("could not close temp file")
 	}
-	if err := os.Rename(tmpfile.Name(), dmtool.jsonpath); err != nil {
+	if err := os.Rename(tmpfile.Name(), d.jsonpath); err != nil {
 		return errors.New("could not commit json config")
 	}
 
 	return nil
 }
 
-func dmToolCreateDevice(dmtool *DmTool, name string, size uint64) error {
+func (d *DmTool) CreateDevice(name string, size uint64) error {
 	device := &DmDevice{}
 
-	remains := uint64(math.Ceil(float64(size / dmtool.ExtentSize)))
+	remains := uint64(math.Ceil(float64(size / d.ExtentSize)))
 
 	for remains > 0 {
-		start, count, offset := findExtents(dmtool, getMinUint64(remains, 255), dmtool.lastextent)
+		start, count, offset := findExtents(d, getMinUint64(remains, 255), d.lastextent)
 		if count == 0 {
-			if offset >= dmtool.extents {
-				dmtool.lastextent = 0
+			if offset >= d.extents {
+				d.lastextent = 0
 				continue
 			}
 
@@ -233,22 +231,27 @@ func dmToolCreateDevice(dmtool *DmTool, name string, size uint64) error {
 		device.Targets = append(device.Targets, start<<8|count)
 		remains -= count
 
-		dmtool.lastextent = offset
+		d.lastextent = offset
 	}
 
-	dmtool.Devices[name] = device
+	d.Devices[name] = device
 
-	return attachDevice(dmtool, name)
+	return attachDevice(d, name)
 }
 
-func dmToolDeleteDevice(dmtool *DmTool, name string) error {
-	device := dmtool.Devices[name]
+func (d *DmTool) DeleteDevice(name string) error {
+	device := d.Devices[name]
 
 	for _, target := range device.Targets {
 		start, count := getTarget(target)
 
-		clearExtents(dmtool, start, count)
+		clearExtents(d, start, count)
 	}
 
-	return detachDevice(dmtool, name)
+	return detachDevice(d, name)
+}
+
+func NewDmTool() *DmTool {
+	d := &DmTool{Devices: make(map[string]*DmDevice)}
+	return d
 }
