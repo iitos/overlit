@@ -41,7 +41,7 @@ func getTarget(target uint64) (start, count uint64) {
 	return
 }
 
-func findExtents(d *DmTool, extents, offset uint64) (uint64, uint64, uint64) {
+func (d *DmTool) findExtents(extents, offset uint64) (uint64, uint64, uint64) {
 	start := uint64(0)
 	count := uint64(0)
 
@@ -65,7 +65,7 @@ func findExtents(d *DmTool, extents, offset uint64) (uint64, uint64, uint64) {
 	return start, count, offset
 }
 
-func setExtents(d *DmTool, offset, count uint64) error {
+func (d *DmTool) setExtents(offset, count uint64) error {
 	for i := uint64(0); i < count; i++ {
 		d.extentbits.Set(uint(offset + i + 1))
 	}
@@ -73,7 +73,7 @@ func setExtents(d *DmTool, offset, count uint64) error {
 	return nil
 }
 
-func clearExtents(d *DmTool, offset, count uint64) error {
+func (d *DmTool) clearExtents(offset, count uint64) error {
 	for i := uint64(0); i < count; i++ {
 		d.extentbits.Clear(uint(offset + i + 1))
 	}
@@ -81,7 +81,7 @@ func clearExtents(d *DmTool, offset, count uint64) error {
 	return nil
 }
 
-func attachDevice(d *DmTool, devname string) error {
+func (d *DmTool) attachDevice(devname string) error {
 	var cookie uint
 
 	device := d.Devices[devname]
@@ -110,7 +110,7 @@ func attachDevice(d *DmTool, devname string) error {
 	return nil
 }
 
-func detachDevice(d *DmTool, devname string) error {
+func (d *DmTool) detachDevice(devname string) error {
 	var cookie uint
 
 	task := dmTaskCreate(deviceRemove)
@@ -124,7 +124,7 @@ func detachDevice(d *DmTool, devname string) error {
 	return nil
 }
 
-func checkDevice(d *DmTool, devname string) int {
+func (d *DmTool) checkDevice(devname string) int {
 	info := &DmInfo{}
 
 	task := dmTaskCreate(deviceInfo)
@@ -157,13 +157,13 @@ func (d *DmTool) Setup(devpath string, extentsize uint64, jsonpath string) error
 				for _, target := range device.Targets {
 					start, count := getTarget(target)
 
-					setExtents(d, start, count)
+					d.setExtents(start, count)
 
 					d.lastextent = start + count
 				}
 
-				if res := checkDevice(d, devname); res == 0 {
-					attachDevice(d, devname)
+				if res := d.checkDevice(devname); res == 0 {
+					d.attachDevice(devname)
 				}
 			}
 		}
@@ -218,7 +218,7 @@ func (d *DmTool) CreateDevice(name string, size uint64) error {
 	remains := getMaxUint64(uint64(math.Ceil(float64(size/d.ExtentSize))), 1)
 
 	for remains > 0 {
-		start, count, offset := findExtents(d, getMinUint64(remains, 255), d.lastextent)
+		start, count, offset := d.findExtents(getMinUint64(remains, 255), d.lastextent)
 		if count == 0 {
 			if offset >= d.extents {
 				d.lastextent = 0
@@ -236,7 +236,7 @@ func (d *DmTool) CreateDevice(name string, size uint64) error {
 
 	d.Devices[name] = device
 
-	return attachDevice(d, name)
+	return d.attachDevice(name)
 }
 
 func (d *DmTool) DeleteDevice(name string) error {
@@ -245,10 +245,10 @@ func (d *DmTool) DeleteDevice(name string) error {
 	for _, target := range device.Targets {
 		start, count := getTarget(target)
 
-		clearExtents(d, start, count)
+		d.clearExtents(start, count)
 	}
 
-	return detachDevice(d, name)
+	return d.detachDevice(name)
 }
 
 func NewDmTool() *DmTool {
