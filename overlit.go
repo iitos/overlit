@@ -195,17 +195,8 @@ func (d *overlitDriver) execCommands(cmds string) error {
 	return nil
 }
 
-func (d *overlitDriver) create(id, parent, fstype string) (rerr error) {
+func (d *overlitDriver) createHomeDir(id, parent string, root idtools.Identity) error {
 	dir := d.getHomePath(id)
-	tarsPath := d.getTarsPath(id)
-	diffPath := d.getDiffPath(id)
-	linkPath := d.getLinkPath(id)
-	workPath := d.getWorkPath(id)
-
-	root, _, _, err := d.getRootIdentity()
-	if err != nil {
-		return err
-	}
 
 	if err := idtools.MkdirAllAndChown(path.Dir(dir), 0700, root); err != nil {
 		return err
@@ -214,25 +205,17 @@ func (d *overlitDriver) create(id, parent, fstype string) (rerr error) {
 		return err
 	}
 
-	if fstype != "" {
-		devPath := d.getDevPath(id)
+	return nil
+}
 
-		if err := d.execCommands(fmt.Sprintf("mkfs.%v,%v", fstype, devPath)); err != nil {
-			return err
-		}
-
-		if err := unix.Mount(devPath, dir, fstype, 0, ""); err != nil {
-			return err
-		}
-	}
+func (d *overlitDriver) createSubDir(id, parent string, root idtools.Identity) error {
+	dir := d.getHomePath(id)
+	tarsPath := d.getTarsPath(id)
+	diffPath := d.getDiffPath(id)
+	linkPath := d.getLinkPath(id)
+	workPath := d.getWorkPath(id)
 
 	lid := generateID(idLength)
-
-	defer func() {
-		if rerr != nil {
-			os.RemoveAll(dir)
-		}
-	}()
 
 	if err := idtools.MkdirAndChown(diffPath, 0755, root); err != nil {
 		return err
@@ -296,37 +279,96 @@ func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []i
 	return nil
 }
 
-func (d *overlitDriver) Create(id, parent, mountLabel string, storageOpt map[string]string) error {
+func (d *overlitDriver) Create(id, parent, mountLabel string, storageOpt map[string]string) (rerr error) {
 	log.Printf("overlit: create (id = %s, parent = %s, mountLabel = %s, storageOpt = %v)\n", id, parent, mountLabel, storageOpt)
 
-	return d.create(id, parent, "")
+	dir := d.getHomePath(id)
+
+	root, _, _, err := d.getRootIdentity()
+	if err != nil {
+		return err
+	}
+
+	if err := d.createHomeDir(id, parent, root); err != nil {
+		return err
+	}
+
+	defer func() {
+		if rerr != nil {
+			os.RemoveAll(dir)
+		}
+	}()
+
+	if err := d.createSubDir(id, parent, root); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOpt map[string]string) error {
+func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOpt map[string]string) (rerr error) {
 	log.Printf("overlit: createreadwrite (id = %s, parent = %s, mountLabel = %s, storageOpt = %v)\n", id, parent, mountLabel, storageOpt)
 
-	rwfsType := ""
-	rwfsSize := uint64(1024 * 1024 * 1024)
+	fstype := ""
+	fssize := uint64(1024 * 1024 * 1024)
 
 	for key, val := range storageOpt {
 		switch key {
 		case "rwfstype":
-			rwfsType = val
+			fstype = val
 		case "rwfssize":
 			size, _ := units.RAMInBytes(val)
-			rwfsSize = uint64(size)
+			fssize = uint64(size)
 		default:
 			return errors.Errorf("not supported option (%s = %s)", key, val)
 		}
 	}
 
-	if rwfsType != "" {
-		if err := d.dmtool.CreateDevice(id, rwfsSize); err != nil {
+	root, _, _, err := d.getRootIdentity()
+	if err != nil {
+		return err
+	}
+
+	if err := d.createHomeDir(id, parent, root); err != nil {
+		return err
+	}
+
+	dir := d.getHomePath(id)
+
+	hasDevice := false
+
+	defer func() {
+		if rerr != nil {
+			if hasDevice {
+				d.dmtool.DeleteDevice(id)
+			}
+
+			os.RemoveAll(dir)
+		}
+	}()
+
+	if fstype != "" {
+		devPath := d.getDevPath(id)
+
+		if err := d.dmtool.CreateDevice(id, fssize); err != nil {
 			return errors.New("could not create device")
+		}
+		hasDevice = true
+
+		if err := d.execCommands(fmt.Sprintf("mkfs.%v,%v", fstype, devPath)); err != nil {
+			return err
+		}
+
+		if err := unix.Mount(devPath, dir, fstype, 0, ""); err != nil {
+			return err
 		}
 	}
 
-	return d.create(id, parent, rwfsType)
+	if err := d.createSubDir(id, parent, root); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (d *overlitDriver) Remove(id string) error {
