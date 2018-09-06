@@ -265,17 +265,16 @@ func (d *overlitDriver) Remove(id string) error {
 		}
 	}
 
-	diffPath := d.getDiffPath(id)
-
-	if err := unix.Unmount(diffPath, unix.MNT_DETACH); err != nil {
-		log.Printf("overlit: failed to unmount diff: %v", err)
+	// Unmount and delete the device if this layer has a logical volume device
+	devPath := d.getDevPath(id)
+	if _, err := os.Stat(devPath); err == nil {
+		unix.Unmount(devPath, unix.MNT_DETACH)
+		d.dmtool.DeleteDevice(id)
 	}
 
 	if err := system.EnsureRemoveAll(dir); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-
-	d.dmtool.DeleteDevice(id)
 
 	return nil
 }
