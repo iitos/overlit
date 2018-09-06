@@ -542,7 +542,7 @@ func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, err
 		return 0, err
 	}
 
-	if err := unix.Mount(devPath, diffPath, d.options.RofsType, 0, id); err != nil {
+	if err := unix.Mount(devPath, diffPath, d.options.RofsType, 0, ""); err != nil {
 		return 0, err
 	}
 
