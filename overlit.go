@@ -112,6 +112,18 @@ func (d *overlitDriver) getTarsPath(id string) string {
 	return path.Join(dir, "tars")
 }
 
+func (d *overlitDriver) getLinkPath(id string) string {
+	dir := d.getHomePath(id)
+
+	return path.Join(dir, "link")
+}
+
+func (d *overlitDriver) getWorkPath(id string) string {
+	dir := d.getHomePath(id)
+
+	return path.Join(dir, "work")
+}
+
 func (d *overlitDriver) getDevPath(id string) string {
 	return path.Join("/dev/mapper", id)
 }
@@ -173,8 +185,12 @@ func (d *overlitDriver) execCommands(cmds string) error {
 	return nil
 }
 
-func (d *overlitDriver) create(id, parent string) (retErr error) {
+func (d *overlitDriver) create(id, parent, fstype string) (rerr error) {
 	dir := d.getHomePath(id)
+	tarsPath := d.getTarsPath(id)
+	diffPath := d.getDiffPath(id)
+	linkPath := d.getLinkPath(id)
+	workPath := d.getWorkPath(id)
 
 	rootUID, rootGID, err := idtools.GetRootUIDGID(d.uidMaps, d.gidMaps)
 	if err != nil {
@@ -189,15 +205,27 @@ func (d *overlitDriver) create(id, parent string) (retErr error) {
 		return err
 	}
 
+	if fstype != "" {
+		devPath := d.getDevPath(id)
+
+		if err := d.execCommands(fmt.Sprintf("mkfs.%v,%v", fstype, devPath)); err != nil {
+			return err
+		}
+
+		if err := unix.Mount(devPath, dir, fstype, 0, ""); err != nil {
+			return err
+		}
+	}
+
 	lid := generateID(idLength)
 
 	defer func() {
-		if retErr != nil {
+		if rerr != nil {
 			os.RemoveAll(dir)
 		}
 	}()
 
-	if err := idtools.MkdirAndChown(path.Join(dir, "diff"), 0755, root); err != nil {
+	if err := idtools.MkdirAndChown(diffPath, 0755, root); err != nil {
 		return err
 	}
 
@@ -205,11 +233,11 @@ func (d *overlitDriver) create(id, parent string) (retErr error) {
 		return err
 	}
 
-	if err := idtools.MkdirAndChown(path.Join(dir, "tars"), 0755, root); err != nil {
+	if err := idtools.MkdirAndChown(tarsPath, 0755, root); err != nil {
 		return err
 	}
 
-	if err := ioutil.WriteFile(path.Join(dir, "link"), []byte(lid), 0644); err != nil {
+	if err := ioutil.WriteFile(linkPath, []byte(lid), 0644); err != nil {
 		return err
 	}
 
@@ -217,7 +245,7 @@ func (d *overlitDriver) create(id, parent string) (retErr error) {
 		return nil
 	}
 
-	if err := idtools.MkdirAndChown(path.Join(dir, "work"), 0700, root); err != nil {
+	if err := idtools.MkdirAndChown(workPath, 0700, root); err != nil {
 		return err
 	}
 
@@ -260,22 +288,36 @@ func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []i
 }
 
 func (d *overlitDriver) Create(id, parent, mountLabel string, storageOpt map[string]string) error {
-	log.Printf("overlit: create (id = %s, parent = %s, mountLabel = %s)\n", id, parent, mountLabel)
+	log.Printf("overlit: create (id = %s, parent = %s, mountLabel = %s, storageOpt = %v)\n", id, parent, mountLabel, storageOpt)
 
-	return d.create(id, parent)
+	return d.create(id, parent, "")
 }
 
 func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOpt map[string]string) error {
-	log.Printf("overlit: createreadwrite (id = %s, parent = %s, mountLabel = %s)\n", id, parent, mountLabel)
+	log.Printf("overlit: createreadwrite (id = %s, parent = %s, mountLabel = %s, storageOpt = %v)\n", id, parent, mountLabel, storageOpt)
+
+	rwfsType := ""
+	rwfsSize := uint64(1024 * 1024 * 1024)
 
 	for key, val := range storageOpt {
 		switch key {
+		case "rwfstype":
+			rwfsType = val
+		case "rwfssize":
+			size, _ := units.RAMInBytes(val)
+			rwfsSize = uint64(size)
 		default:
 			return errors.Errorf("not supported option (%s = %s)", key, val)
 		}
 	}
 
-	return d.create(id, parent)
+	if rwfsType != "" {
+		if err := d.dmtool.CreateDevice(id, rwfsSize); err != nil {
+			return errors.New("could not create device")
+		}
+	}
+
+	return d.create(id, parent, rwfsType)
 }
 
 func (d *overlitDriver) Remove(id string) error {
@@ -307,7 +349,7 @@ func (d *overlitDriver) Remove(id string) error {
 	return nil
 }
 
-func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, retErr error) {
+func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, rerr error) {
 	log.Printf("overlit: get (id = %s)\n", id)
 
 	d.locker.Lock(id)
@@ -332,7 +374,7 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 		return containerfs.NewLocalContainerFS(mergedPath), nil
 	}
 	defer func() {
-		if retErr != nil {
+		if rerr != nil {
 			if c := d.ctr.Decrement(mergedPath); c <= 0 {
 				if mntErr := unix.Unmount(mergedPath, 0); mntErr != nil {
 					log.Printf("overlit: failed to mount %v: %v", mergedPath, mntErr)
@@ -344,7 +386,7 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 		}
 	}()
 
-	workDir := path.Join(dir, "work")
+	workPath := path.Join(dir, "work")
 	splitLowers := strings.Split(string(lowers), ":")
 	absLowers := make([]string, len(splitLowers))
 	for i, s := range splitLowers {
@@ -386,7 +428,7 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 		return nil, errors.Errorf("error creating overlay mount to %s: %v", mergedPath, err)
 	}
 
-	if err := os.Chown(path.Join(workDir, "work"), rootUID, rootGID); err != nil {
+	if err := os.Chown(path.Join(workPath, "work"), rootUID, rootGID); err != nil {
 		return nil, err
 	}
 
