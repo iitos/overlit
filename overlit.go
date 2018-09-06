@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/docker/docker/daemon/graphdriver"
@@ -43,6 +44,9 @@ type overlitOptions struct {
 	DevName    string
 	GroupName  string
 	ExtentSize uint64
+	RofsType   string
+	RofsRate   float64
+	RofsCmds   string
 }
 
 type overlitDriver struct {
@@ -75,6 +79,12 @@ func parseOptions(options []string) (*overlitOptions, error) {
 		case "extentsize":
 			size, _ := units.RAMInBytes(val)
 			opts.ExtentSize = uint64(size)
+		case "rofstype":
+			opts.RofsType = val
+		case "rofsrate":
+			opts.RofsRate, _ = strconv.ParseFloat(val, 64)
+		case "rofscmds":
+			opts.RofsCmds = val
 		default:
 			return nil, fmt.Errorf("overlit: Unknown option (%s = %s)", key, val)
 		}
@@ -93,10 +103,10 @@ func (d *overlitDriver) getDiffPath(id string) string {
 	return path.Join(dir, "diff")
 }
 
-func (d *overlitDriver) getTempPath(id string) string {
+func (d *overlitDriver) getTarsPath(id string) string {
 	dir := d.getHomePath(id)
 
-	return path.Join(dir, "temp")
+	return path.Join(dir, "tars")
 }
 
 func (d *overlitDriver) getDevPath(id string) string {
@@ -177,7 +187,7 @@ func (d *overlitDriver) create(id, parent string) (retErr error) {
 		return err
 	}
 
-	if err := idtools.MkdirAndChown(path.Join(dir, "temp"), 0755, root); err != nil {
+	if err := idtools.MkdirAndChown(path.Join(dir, "tars"), 0755, root); err != nil {
 		return err
 	}
 
@@ -486,7 +496,7 @@ func (d *overlitDriver) Changes(id, parent string) ([]graphhelper.Change, error)
 func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, error) {
 	log.Printf("overlit: applydiff (id = %s, parent = %s)\n", id, parent)
 
-	tempPath := d.getTempPath(id)
+	tarsPath := d.getTarsPath(id)
 	diffPath := d.getDiffPath(id)
 	devPath := d.getDevPath(id)
 
@@ -497,23 +507,29 @@ func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, err
 		InUserNS:       rsystem.RunningInUserNS(),
 	}
 
-	size, err := archive.ApplyUncompressedLayer(tempPath, diff, options)
+	size, err := archive.ApplyUncompressedLayer(tarsPath, diff, options)
 	if err != nil {
 		return 0, err
 	}
 
-	d.dmtool.CreateDevice(id, uint64(math.Ceil(float64(size)*1.5)))
-
-	mkraonfs, err := exec.LookPath("mkraonfs.py")
-	if err != nil {
+	if err := d.dmtool.CreateDevice(id, uint64(math.Ceil(float64(size)*d.options.RofsRate))); err != nil {
 		return 0, err
 	}
 
-	if _, err := exec.Command(mkraonfs, "-s", tempPath, "-t", devPath).CombinedOutput(); err != nil {
-		return 0, err
+	cmds := d.options.RofsCmds
+	cmds = strings.Replace(cmds, "{tars}", tarsPath, -1)
+	cmds = strings.Replace(cmds, "{diff}", diffPath, -1)
+	cmds = strings.Replace(cmds, "{dev}", devPath, -1)
+
+	for _, cmd := range strings.Split(cmds, ":") {
+		args := strings.Split(cmd, ",")
+
+		if err := exec.Command(args[0], args[1:]...).Run(); err != nil {
+			return 0, err
+		}
 	}
 
-	if err := unix.Mount(devPath, diffPath, "raonfs", 0, id); err != nil {
+	if err := unix.Mount(devPath, diffPath, d.options.RofsType, 0, id); err != nil {
 		return 0, err
 	}
 
