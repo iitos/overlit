@@ -118,10 +118,22 @@ func (d *overlitDriver) getLinkPath(id string) string {
 	return path.Join(dir, "link")
 }
 
+func (d *overlitDriver) getFsysPath(id string) string {
+	dir := d.getHomePath(id)
+
+	return path.Join(dir, "fsys")
+}
+
 func (d *overlitDriver) getWorkPath(id string) string {
 	dir := d.getHomePath(id)
 
 	return path.Join(dir, "work")
+}
+
+func (d *overlitDriver) getMergedPath(id string) string {
+	dir := d.getHomePath(id)
+
+	return path.Join(dir, "merged")
 }
 
 func (d *overlitDriver) getDevPath(id string) string {
@@ -208,11 +220,12 @@ func (d *overlitDriver) createHomeDir(id, parent string, root idtools.Identity) 
 	return nil
 }
 
-func (d *overlitDriver) createSubDir(id, parent string, root idtools.Identity) error {
+func (d *overlitDriver) createSubDir(id, parent string, root idtools.Identity, fstype string) error {
 	dir := d.getHomePath(id)
 	tarsPath := d.getTarsPath(id)
 	diffPath := d.getDiffPath(id)
 	linkPath := d.getLinkPath(id)
+	fsysPath := d.getFsysPath(id)
 	workPath := d.getWorkPath(id)
 
 	lid := generateID(idLength)
@@ -230,6 +243,10 @@ func (d *overlitDriver) createSubDir(id, parent string, root idtools.Identity) e
 	}
 
 	if err := ioutil.WriteFile(linkPath, []byte(lid), 0644); err != nil {
+		return err
+	}
+
+	if err := ioutil.WriteFile(fsysPath, []byte(fstype), 0644); err != nil {
 		return err
 	}
 
@@ -299,7 +316,7 @@ func (d *overlitDriver) Create(id, parent, mountLabel string, storageOpt map[str
 		}
 	}()
 
-	if err := d.createSubDir(id, parent, root); err != nil {
+	if err := d.createSubDir(id, parent, root, d.options.RofsType); err != nil {
 		return err
 	}
 
@@ -371,7 +388,7 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 		}
 	}
 
-	if err := d.createSubDir(id, parent, root); err != nil {
+	if err := d.createSubDir(id, parent, root, ""); err != nil {
 		return err
 	}
 
@@ -418,7 +435,11 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 		return nil, err
 	}
 
-	diffPath := path.Join(dir, "diff")
+	diffPath := d.getDiffPath(id)
+	fsysPath := d.getFsysPath(id)
+	mergedPath := d.getMergedPath(id)
+	devPath := d.getDevPath(id)
+
 	lowers, err := ioutil.ReadFile(path.Join(dir, lowerFile))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -427,7 +448,13 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 		return nil, err
 	}
 
-	mergedPath := path.Join(dir, "merged")
+	fstype, err := ioutil.ReadFile(fsysPath)
+	if err == nil && len(fstype) > 0 {
+		if err := unix.Mount(devPath, diffPath, string(fstype), 0, ""); err != nil {
+			return nil, err
+		}
+	}
+
 	if count := d.ctr.Increment(mergedPath); count > 1 {
 		return containerfs.NewLocalContainerFS(mergedPath), nil
 	}
@@ -517,6 +544,11 @@ func (d *overlitDriver) Put(id string) error {
 	}
 	if err := unix.Rmdir(mountpoint); err != nil && !os.IsNotExist(err) {
 		log.Printf("overlit: failed to remove %s: %v", id, err)
+	}
+
+	devPath := d.getDevPath(id)
+	if _, err := os.Stat(devPath); err == nil {
+		unix.Unmount(devPath, unix.MNT_DETACH)
 	}
 
 	return nil
