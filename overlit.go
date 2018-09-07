@@ -703,5 +703,10 @@ func NewOverlitDriver(options []string) (*overlitDriver, error) {
 		return nil, err
 	}
 
+	// Check if read-only filesystem is available
+	if err := checkFSAvailable(d.options.RofsType); err != nil {
+		return nil, err
+	}
+
 	return d, nil
 }
