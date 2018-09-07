@@ -95,6 +95,26 @@ func parseOptions(options []string) (*overlitOptions, error) {
 	return opts, nil
 }
 
+func parseRWFSOptions(options map[string]string) (fstype string, fssize uint64, rerr error) {
+	for key, val := range options {
+		switch key {
+		case "rwfstype":
+			// Check if read-write filesystem is available
+			if err := checkFSAvailable(val); err != nil {
+				return "", 0, err
+			}
+			fstype = val
+		case "rwfssize":
+			size, _ := units.RAMInBytes(val)
+			fssize = uint64(size)
+		default:
+			return "", 0, errors.Errorf("not supported option (%s = %s)", key, val)
+		}
+	}
+
+	return
+}
+
 func (d *overlitDriver) getHomePath(id string) string {
 	return path.Join(d.home, id)
 }
@@ -308,20 +328,9 @@ func (d *overlitDriver) Create(id, parent, mountLabel string, storageOpt map[str
 func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOpt map[string]string) (rerr error) {
 	log.Printf("overlit: createreadwrite (id = %s, parent = %s, mountLabel = %s, storageOpt = %v)\n", id, parent, mountLabel, storageOpt)
 
-	fstype := ""
-	fssize := uint64(1024 * 1024 * 1024)
+	dir := d.getHomePath(id)
 
-	for key, val := range storageOpt {
-		switch key {
-		case "rwfstype":
-			fstype = val
-		case "rwfssize":
-			size, _ := units.RAMInBytes(val)
-			fssize = uint64(size)
-		default:
-			return errors.Errorf("not supported option (%s = %s)", key, val)
-		}
-	}
+	hasDevice := false
 
 	root, _, _, err := d.getRootIdentity()
 	if err != nil {
@@ -331,10 +340,6 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 	if err := d.createHomeDir(id, parent, root); err != nil {
 		return err
 	}
-
-	dir := d.getHomePath(id)
-
-	hasDevice := false
 
 	defer func() {
 		if rerr != nil {
@@ -346,7 +351,10 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 		}
 	}()
 
-	if fstype != "" {
+	fstype, fssize, err := parseRWFSOptions(storageOpt)
+	if err != nil {
+		return err
+	} else if fstype != "" {
 		devPath := d.getDevPath(id)
 
 		if err := d.dmtool.CreateDevice(id); err != nil {
