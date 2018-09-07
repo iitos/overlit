@@ -699,7 +699,7 @@ func NewOverlitDriver(options []string) (*overlitDriver, error) {
 	d.dmtool = NewDmTool()
 
 	// Check if overlayfs is available
-	if err := checkOverlayFSAvailable(); err != nil {
+	if err := checkFSAvailable("overlay"); err != nil {
 		return nil, err
 	}
 
