@@ -3,14 +3,12 @@ package main
 import (
 	"bufio"
 	"os"
-	"os/exec"
+	"strings"
 
 	"github.com/pkg/errors"
 )
 
-func checkOverlayFSAvailable() error {
-	exec.Command("modprobe", "overlay").Run()
-
+func checkFSAvailable(fstype string) error {
 	f, err := os.Open("/proc/filesystems")
 	if err != nil {
 		return err
@@ -19,7 +17,7 @@ func checkOverlayFSAvailable() error {
 
 	s := bufio.NewScanner(f)
 	for s.Scan() {
-		if s.Text() == "nodev\toverlay" {
+		if strings.Contains(s.Text(), fstype) {
 			return nil
 		}
 	}
