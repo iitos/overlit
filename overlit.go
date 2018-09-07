@@ -303,6 +303,10 @@ func (d *overlitDriver) Create(id, parent, mountLabel string, storageOpt map[str
 		return err
 	}
 
+	if err := d.dmtool.CreateDevice(id); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -350,8 +354,11 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 	if fstype != "" {
 		devPath := d.getDevPath(id)
 
-		if err := d.dmtool.CreateDevice(id, fssize); err != nil {
+		if err := d.dmtool.CreateDevice(id); err != nil {
 			return errors.New("could not create device")
+		}
+		if err := d.dmtool.ResizeDevice(id, fssize); err != nil {
+			return errors.New("could not resize device")
 		}
 		hasDevice = true
 
@@ -559,7 +566,11 @@ func (d *overlitDriver) Cleanup() error {
 
 	d.dmtool.Cleanup()
 
-	return mount.RecursiveUnmount(d.home)
+	if d.home != "" {
+		return mount.RecursiveUnmount(d.home)
+	}
+
+	return nil
 }
 
 func (d *overlitDriver) Diff(id, parent string) io.ReadCloser {
@@ -623,7 +634,7 @@ func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, err
 		return 0, err
 	}
 
-	if err := d.dmtool.CreateDevice(id, uint64(math.Ceil(float64(size)*d.options.RofsRate))); err != nil {
+	if err := d.dmtool.ResizeDevice(id, uint64(math.Ceil(float64(size)*d.options.RofsRate))); err != nil {
 		return 0, err
 	}
 
@@ -646,6 +657,8 @@ func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, err
 	if err := d.execCommands(cmd1); err != nil {
 		return 0, err
 	}
+
+	log.Printf("overlit: applydiff (size = %v)\n", size)
 
 	return size, nil
 }

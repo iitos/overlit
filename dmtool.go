@@ -16,6 +16,7 @@ import (
 
 type DmDevice struct {
 	Targets []uint64 `json:"targets"`
+	Extents uint64   `json:"extents"`
 }
 
 type DmTool struct {
@@ -84,23 +85,9 @@ func (d *DmTool) clearExtents(offset, count uint64) error {
 func (d *DmTool) attachDevice(devname string) error {
 	var cookie uint
 
-	device := d.Devices[devname]
-
-	multis := uint64(d.ExtentSize / 512)
-
 	task := dmTaskCreate(deviceCreate)
 	dmTaskSetName(task, devname)
-
-	offset := uint64(0)
-
-	for _, target := range device.Targets {
-		start, count := getTarget(target)
-
-		dmTaskAddTarget(task, offset*multis, count*multis, "linear", fmt.Sprintf("%v %v", d.DevPath, start*multis))
-
-		offset += count
-	}
-
+	dmTaskAddTarget(task, 0, 1, "zero", "")
 	dmTaskSetCookie(task, &cookie, 0)
 	dmTaskRun(task)
 	dmTaskDestroy(task)
@@ -136,6 +123,44 @@ func (d *DmTool) checkDevice(devname string) int {
 	return info.Exists
 }
 
+func (d *DmTool) reloadDevice(devname string) error {
+	device := d.Devices[devname]
+
+	multis := uint64(d.ExtentSize / 512)
+
+	task := dmTaskCreate(deviceReload)
+	dmTaskSetName(task, devname)
+
+	offset := uint64(0)
+
+	for _, target := range device.Targets {
+		start, count := getTarget(target)
+
+		dmTaskAddTarget(task, offset*multis, count*multis, "linear", fmt.Sprintf("%v %v", d.DevPath, start*multis))
+
+		offset += count
+	}
+
+	dmTaskRun(task)
+	dmTaskDestroy(task)
+
+	return nil
+}
+
+func (d *DmTool) resumeDevice(devname string) error {
+	var cookie uint
+
+	task := dmTaskCreate(deviceResume)
+	dmTaskSetName(task, devname)
+	dmTaskSetCookie(task, &cookie, 0)
+	dmTaskRun(task)
+	dmTaskDestroy(task)
+
+	dmUdevWait(cookie)
+
+	return nil
+}
+
 func (d *DmTool) Setup(devpath string, extentsize uint64, jsonpath string) error {
 	devsize := getDeviceSize(devpath)
 	if devsize == 0 {
@@ -164,6 +189,13 @@ func (d *DmTool) Setup(devpath string, extentsize uint64, jsonpath string) error
 
 				if res := d.checkDevice(devname); res == 0 {
 					d.attachDevice(devname)
+				}
+
+				if err := d.reloadDevice(devname); err != nil {
+					return errors.New("could not reload device")
+				}
+				if err := d.resumeDevice(devname); err != nil {
+					return errors.New("could not resume device")
 				}
 			}
 		}
@@ -212,27 +244,8 @@ func (d *DmTool) Flush() error {
 	return nil
 }
 
-func (d *DmTool) CreateDevice(name string, size uint64) error {
+func (d *DmTool) CreateDevice(name string) error {
 	device := &DmDevice{}
-
-	remains := getMaxUint64(uint64(math.Ceil(float64(size/d.ExtentSize))), 1)
-
-	for remains > 0 {
-		start, count, offset := d.findExtents(getMinUint64(remains, 255), d.lastextent)
-		if count == 0 {
-			if offset >= d.extents {
-				d.lastextent = 0
-				continue
-			}
-
-			return errors.New("count not attach device")
-		}
-
-		device.Targets = append(device.Targets, start<<8|count)
-		remains -= count
-
-		d.lastextent = offset
-	}
 
 	d.Devices[name] = device
 
@@ -249,6 +262,40 @@ func (d *DmTool) DeleteDevice(name string) error {
 	}
 
 	return d.detachDevice(name)
+}
+
+func (d *DmTool) ResizeDevice(name string, size uint64) error {
+	device := d.Devices[name]
+	device.Extents = getMaxUint64(uint64(math.Ceil(float64(size/d.ExtentSize))), 1)
+	device.Targets = nil
+
+	remains := device.Extents
+
+	for remains > 0 {
+		start, count, offset := d.findExtents(getMinUint64(remains, 255), d.lastextent)
+		if count == 0 {
+			if offset >= d.extents {
+				d.lastextent = 0
+				continue
+			}
+
+			return errors.New("count not resize device")
+		}
+
+		device.Targets = append(device.Targets, start<<8|count)
+
+		remains -= count
+		d.lastextent = offset
+	}
+
+	if err := d.reloadDevice(name); err != nil {
+		return err
+	}
+	if err := d.resumeDevice(name); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func NewDmTool() *DmTool {
