@@ -293,6 +293,19 @@ func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []i
 		return err
 	}
 
+	for devname, _ := range d.dmtool.Devices {
+		diffPath := d.getDiffPath(devname)
+		fsysPath := d.getFsysPath(devname)
+		devPath := d.getDevPath(devname)
+
+		fstype, err := ioutil.ReadFile(fsysPath)
+		if err == nil && len(fstype) > 0 {
+			if err := unix.Mount(devPath, diffPath, string(fstype), 0, ""); err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -435,26 +448,15 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 		return nil, err
 	}
 
-	diffPath := d.getDiffPath(id)
-	fsysPath := d.getFsysPath(id)
-	mergedPath := d.getMergedPath(id)
-	devPath := d.getDevPath(id)
-
 	lowers, err := ioutil.ReadFile(path.Join(dir, lowerFile))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return containerfs.NewLocalContainerFS(diffPath), nil
+			return containerfs.NewLocalContainerFS(d.getDiffPath(id)), nil
 		}
 		return nil, err
 	}
 
-	fstype, err := ioutil.ReadFile(fsysPath)
-	if err == nil && len(fstype) > 0 {
-		if err := unix.Mount(devPath, diffPath, string(fstype), 0, ""); err != nil {
-			return nil, err
-		}
-	}
-
+	mergedPath := d.getMergedPath(id)
 	if count := d.ctr.Increment(mergedPath); count > 1 {
 		return containerfs.NewLocalContainerFS(mergedPath), nil
 	}
@@ -544,11 +546,6 @@ func (d *overlitDriver) Put(id string) error {
 	}
 	if err := unix.Rmdir(mountpoint); err != nil && !os.IsNotExist(err) {
 		log.Printf("overlit: failed to remove %s: %v", id, err)
-	}
-
-	devPath := d.getDevPath(id)
-	if _, err := os.Stat(devPath); err == nil {
-		unix.Unmount(devPath, unix.MNT_DETACH)
 	}
 
 	return nil
