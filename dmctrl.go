@@ -115,6 +115,10 @@ func dmTaskSetRo(task *dmTask) int {
 	return int(C.dm_task_set_ro((*C.struct_dm_task)(task)))
 }
 
+func dmTaskGetErrno(task *dmTask) int {
+	return int(C.dm_task_get_errno((*C.struct_dm_task)(task)))
+}
+
 func dmTaskAddTarget(task *dmTask, start, size uint64, ttype, params string) int {
 	cttype := C.CString(ttype)
 	defer free(cttype)
