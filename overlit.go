@@ -35,7 +35,6 @@ import (
 const (
 	driverName = "overlit"
 	linkDir    = "l"
-	lowerFile  = "lower"
 	maxDepth   = 128
 	idLength   = 26
 )
@@ -100,86 +99,36 @@ func (d *overlitDriver) getHomePath(id string) string {
 	return path.Join(d.home, id)
 }
 
-func (d *overlitDriver) getDiffPath(id string) string {
-	dir := d.getHomePath(id)
-
-	return path.Join(dir, "diff")
+func (d *overlitDriver) getDiffPath(home string) string {
+	return path.Join(home, "diff")
 }
 
-func (d *overlitDriver) getTarsPath(id string) string {
-	dir := d.getHomePath(id)
-
-	return path.Join(dir, "tars")
+func (d *overlitDriver) getTarsPath(home string) string {
+	return path.Join(home, "tars")
 }
 
-func (d *overlitDriver) getLinkPath(id string) string {
-	dir := d.getHomePath(id)
-
-	return path.Join(dir, "link")
+func (d *overlitDriver) getLinkPath(home string) string {
+	return path.Join(home, "link")
 }
 
-func (d *overlitDriver) getFsysPath(id string) string {
-	dir := d.getHomePath(id)
-
-	return path.Join(dir, "fsys")
+func (d *overlitDriver) getLowerPath(home string) string {
+	return path.Join(home, "lower")
 }
 
-func (d *overlitDriver) getWorkPath(id string) string {
-	dir := d.getHomePath(id)
-
-	return path.Join(dir, "work")
+func (d *overlitDriver) getFsysPath(home string) string {
+	return path.Join(home, "fsys")
 }
 
-func (d *overlitDriver) getMergedPath(id string) string {
-	dir := d.getHomePath(id)
+func (d *overlitDriver) getWorkPath(home string) string {
+	return path.Join(home, "work")
+}
 
-	return path.Join(dir, "merged")
+func (d *overlitDriver) getMergedPath(home string) string {
+	return path.Join(home, "merged")
 }
 
 func (d *overlitDriver) getDevPath(id string) string {
 	return path.Join("/dev/mapper", id)
-}
-
-func (d *overlitDriver) getLowerPath(parent string) (string, error) {
-	parentPath := d.getHomePath(parent)
-
-	if _, err := os.Lstat(parentPath); err != nil {
-		return "", err
-	}
-
-	parentLink, err := ioutil.ReadFile(path.Join(parentPath, "link"))
-	if err != nil {
-		return "", err
-	}
-	lowers := []string{path.Join(linkDir, string(parentLink))}
-
-	parentLower, err := ioutil.ReadFile(path.Join(parentPath, lowerFile))
-	if err == nil {
-		parentLowers := strings.Split(string(parentLower), ":")
-		lowers = append(lowers, parentLowers...)
-	}
-	if len(lowers) > maxDepth {
-		return "", errors.New("max depth exceeded")
-	}
-	return strings.Join(lowers, ":"), nil
-}
-
-func (d *overlitDriver) getLowerDirs(id string) ([]string, error) {
-	var lowersArray []string
-
-	lowers, err := ioutil.ReadFile(path.Join(d.getHomePath(id), lowerFile))
-	if err == nil {
-		for _, s := range strings.Split(string(lowers), ":") {
-			lp, err := os.Readlink(path.Join(d.home, s))
-			if err != nil {
-				return nil, err
-			}
-			lowersArray = append(lowersArray, path.Clean(path.Join(d.home, linkDir, lp)))
-		}
-	} else if !os.IsNotExist(err) {
-		return nil, err
-	}
-	return lowersArray, nil
 }
 
 func (d *overlitDriver) getRootIdentity() (idtools.Identity, int, int, error) {
@@ -222,11 +171,11 @@ func (d *overlitDriver) createHomeDir(id, parent string, root idtools.Identity) 
 
 func (d *overlitDriver) createSubDir(id, parent string, root idtools.Identity, fstype string) error {
 	dir := d.getHomePath(id)
-	tarsPath := d.getTarsPath(id)
-	diffPath := d.getDiffPath(id)
-	linkPath := d.getLinkPath(id)
-	fsysPath := d.getFsysPath(id)
-	workPath := d.getWorkPath(id)
+	tarsPath := d.getTarsPath(dir)
+	diffPath := d.getDiffPath(dir)
+	linkPath := d.getLinkPath(dir)
+	fsysPath := d.getFsysPath(dir)
+	workPath := d.getWorkPath(dir)
 
 	lid := generateID(idLength)
 
@@ -258,13 +207,28 @@ func (d *overlitDriver) createSubDir(id, parent string, root idtools.Identity, f
 		return err
 	}
 
-	lower, err := d.getLowerPath(parent)
-	if err != nil {
+	pdir := d.getHomePath(parent)
+	if _, err := os.Lstat(pdir); err != nil {
 		return err
 	}
 
-	if lower != "" {
-		if err := ioutil.WriteFile(path.Join(dir, lowerFile), []byte(lower), 0666); err != nil {
+	plink, err := ioutil.ReadFile(d.getLinkPath(pdir))
+	if err != nil {
+		return err
+	}
+	lowers := []string{path.Join(linkDir, string(plink))}
+
+	plower, err := ioutil.ReadFile(d.getLowerPath(pdir))
+	if err == nil {
+		plowers := strings.Split(string(plower), ":")
+		lowers = append(lowers, plowers...)
+	}
+	if len(lowers) > maxDepth {
+		return errors.New("max depth exceeded")
+	}
+
+	if len(lowers) > 0 {
+		if err := ioutil.WriteFile(d.getLowerPath(dir), []byte(strings.Join(lowers, ":")), 0666); err != nil {
 			return err
 		}
 	}
@@ -294,8 +258,9 @@ func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []i
 	}
 
 	for devname, _ := range d.dmtool.Devices {
-		diffPath := d.getDiffPath(devname)
-		fsysPath := d.getFsysPath(devname)
+		dir := d.getHomePath(devname)
+		diffPath := d.getDiffPath(dir)
+		fsysPath := d.getFsysPath(dir)
 		devPath := d.getDevPath(devname)
 
 		fstype, err := ioutil.ReadFile(fsysPath)
@@ -416,7 +381,7 @@ func (d *overlitDriver) Remove(id string) error {
 
 	dir := d.getHomePath(id)
 
-	lid, err := ioutil.ReadFile(path.Join(dir, "link"))
+	lid, err := ioutil.ReadFile(d.getLinkPath(dir))
 	if err == nil {
 		if err := os.RemoveAll(path.Join(d.home, linkDir, string(lid))); err != nil {
 			log.Printf("overlit: failed to remove link: %v", err)
@@ -448,7 +413,7 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 		return nil, err
 	}
 
-	lowers, err := ioutil.ReadFile(path.Join(dir, lowerFile))
+	lower, err := ioutil.ReadFile(d.getLowerPath(dir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return containerfs.NewLocalContainerFS(d.getDiffPath(id)), nil
@@ -456,7 +421,7 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 		return nil, err
 	}
 
-	mergedPath := d.getMergedPath(id)
+	mergedPath := d.getMergedPath(dir)
 	if count := d.ctr.Increment(mergedPath); count > 1 {
 		return containerfs.NewLocalContainerFS(mergedPath), nil
 	}
@@ -473,13 +438,12 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 		}
 	}()
 
-	workPath := path.Join(dir, "work")
-	splitLowers := strings.Split(string(lowers), ":")
+	splitLowers := strings.Split(string(lower), ":")
 	absLowers := make([]string, len(splitLowers))
 	for i, s := range splitLowers {
 		absLowers[i] = path.Join(d.home, s)
 	}
-	opts := fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", strings.Join(absLowers, ":"), path.Join(dir, "diff"), path.Join(dir, "work"))
+	opts := fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", strings.Join(absLowers, ":"), d.getDiffPath(dir), d.getWorkPath(dir))
 	mountData := label.FormatMountLabel(opts, mountLabel)
 	mount := unix.Mount
 	mountTarget := mergedPath
@@ -499,7 +463,7 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 	}
 
 	if len(mountData) > pageSize {
-		opts = fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", string(lowers), path.Join(id, "diff"), path.Join(id, "work"))
+		opts = fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", string(lower), d.getDiffPath(dir), d.getWorkPath(dir))
 		mountData = label.FormatMountLabel(opts, mountLabel)
 		if len(mountData) > pageSize {
 			return nil, errors.Errorf("could not mount layer, mount label too large %d", len(mountData))
@@ -508,14 +472,14 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 		mount = func(source string, target string, mType string, flags uintptr, label string) error {
 			return mountFrom(d.home, source, target, mType, flags, label)
 		}
-		mountTarget = path.Join(id, "merged")
+		mountTarget = d.getMergedPath(dir)
 	}
 
 	if err := mount("overlay", mountTarget, "overlay", 0, mountData); err != nil {
 		return nil, errors.Errorf("error creating overlay mount to %s: %v", mergedPath, err)
 	}
 
-	if err := os.Chown(path.Join(workPath, "work"), rootUID, rootGID); err != nil {
+	if err := os.Chown(d.getWorkPath(dir), rootUID, rootGID); err != nil {
 		return nil, err
 	}
 
@@ -529,7 +493,8 @@ func (d *overlitDriver) Put(id string) error {
 	defer d.locker.Unlock(id)
 
 	dir := d.getHomePath(id)
-	_, err := ioutil.ReadFile(path.Join(dir, lowerFile))
+
+	_, err := ioutil.ReadFile(d.getLowerPath(dir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -537,7 +502,7 @@ func (d *overlitDriver) Put(id string) error {
 		return err
 	}
 
-	mountpoint := path.Join(dir, "merged")
+	mountpoint := d.getMergedPath(dir)
 	if count := d.ctr.Decrement(mountpoint); count > 0 {
 		return nil
 	}
@@ -574,15 +539,26 @@ func (d *overlitDriver) GetMetadata(id string) (map[string]string, error) {
 	}
 
 	metadata := map[string]string{
-		"WorkDir":   path.Join(dir, "work"),
-		"MergedDir": path.Join(dir, "merged"),
-		"UpperDir":  path.Join(dir, "diff"),
+		"WorkDir":   d.getWorkPath(dir),
+		"MergedDir": d.getMergedPath(dir),
+		"UpperDir":  d.getDiffPath(dir),
 	}
 
-	lowerDirs, err := d.getLowerDirs(id)
-	if err != nil {
+	var lowerDirs []string
+
+	lower, err := ioutil.ReadFile(d.getLowerPath(dir))
+	if err == nil {
+		for _, s := range strings.Split(string(lower), ":") {
+			lp, err := os.Readlink(path.Join(d.home, s))
+			if err != nil {
+				return nil, err
+			}
+			lowerDirs = append(lowerDirs, path.Clean(path.Join(d.home, linkDir, lp)))
+		}
+	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
+
 	if len(lowerDirs) > 0 {
 		metadata["LowerDir"] = strings.Join(lowerDirs, ":")
 	}
@@ -605,7 +581,8 @@ func (d *overlitDriver) Cleanup() error {
 func (d *overlitDriver) Diff(id, parent string) io.ReadCloser {
 	log.Printf("overlit: diff (id = %s, parent = %s)\n", id, parent)
 
-	diffPath := d.getDiffPath(id)
+	dir := d.getHomePath(id)
+	diffPath := d.getDiffPath(dir)
 
 	diff, _ := archive.TarWithOptions(diffPath, &archive.TarOptions{
 		Compression:    archive.Uncompressed,
@@ -620,11 +597,15 @@ func (d *overlitDriver) Diff(id, parent string) io.ReadCloser {
 func (d *overlitDriver) Changes(id, parent string) ([]graphhelper.Change, error) {
 	log.Printf("overlit: changes (id = %s, parent = %s)\n", id, parent)
 
-	diffPath := d.getDiffPath(id)
+	dir := d.getHomePath(id)
+
+	diffPath := d.getDiffPath(dir)
 	parentPath := ""
 
 	if parent != "" {
-		parentPath = d.getDiffPath(parent)
+		pdir := d.getHomePath(parent)
+
+		parentPath = d.getDiffPath(pdir)
 	}
 
 	_changes, err := archive.ChangesDirs(diffPath, parentPath)
@@ -647,8 +628,9 @@ func (d *overlitDriver) Changes(id, parent string) ([]graphhelper.Change, error)
 func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, error) {
 	log.Printf("overlit: applydiff (id = %s, parent = %s)\n", id, parent)
 
-	tarsPath := d.getTarsPath(id)
-	diffPath := d.getDiffPath(id)
+	dir := d.getHomePath(id)
+	tarsPath := d.getTarsPath(dir)
+	diffPath := d.getDiffPath(dir)
 	devPath := d.getDevPath(id)
 
 	options := &archive.TarOptions{
