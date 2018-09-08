@@ -35,6 +35,14 @@ import (
 const (
 	driverName = "overlit"
 	linkDir    = "l"
+	diffDir    = "diff"
+	tarsDir    = "tars"
+	linkFile   = "link"
+	lowerFile  = "lower"
+	fsysFile   = "fsys"
+	workDir    = "work"
+	mergedDir  = "merged"
+	configFile = "dmtool.json"
 	maxDepth   = 128
 	idLength   = 26
 )
@@ -121,31 +129,31 @@ func (d *overlitDriver) getHomePath(id string) string {
 }
 
 func (d *overlitDriver) getDiffPath(home string) string {
-	return path.Join(home, "diff")
+	return path.Join(home, diffDir)
 }
 
 func (d *overlitDriver) getTarsPath(home string) string {
-	return path.Join(home, "tars")
+	return path.Join(home, tarsDir)
 }
 
 func (d *overlitDriver) getLinkPath(home string) string {
-	return path.Join(home, "link")
+	return path.Join(home, linkFile)
 }
 
 func (d *overlitDriver) getLowerPath(home string) string {
-	return path.Join(home, "lower")
+	return path.Join(home, lowerFile)
 }
 
 func (d *overlitDriver) getFsysPath(home string) string {
-	return path.Join(home, "fsys")
+	return path.Join(home, fsysFile)
 }
 
 func (d *overlitDriver) getWorkPath(home string) string {
-	return path.Join(home, "work")
+	return path.Join(home, workDir)
 }
 
 func (d *overlitDriver) getMergedPath(home string) string {
-	return path.Join(home, "merged")
+	return path.Join(home, mergedDir)
 }
 
 func (d *overlitDriver) getDevPath(id string) string {
@@ -217,7 +225,7 @@ func (d *overlitDriver) createSubDir(id, parent string, root idtools.Identity, f
 		return err
 	}
 
-	if err := os.Symlink(path.Join("..", id, "diff"), path.Join(d.home, linkDir, lid)); err != nil {
+	if err := os.Symlink(path.Join("..", id, diffDir), path.Join(d.home, linkDir, lid)); err != nil {
 		return err
 	}
 
@@ -287,7 +295,7 @@ func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []i
 		return err
 	}
 
-	if err := d.dmtool.Setup(d.options.DevName, d.options.ExtentSize, fmt.Sprintf("%v/dmtool.json", d.home)); err != nil {
+	if err := d.dmtool.Setup(d.options.DevName, d.options.ExtentSize, fmt.Sprintf("%v/%v", d.home, configFile)); err != nil {
 		return err
 	}
 
