@@ -97,6 +97,7 @@ func parseOptions(options []string) (*overlitOptions, error) {
 
 func parseRWFSOptions(options map[string]string) (fstype string, fssize uint64, rerr error) {
 	for key, val := range options {
+		key = strings.ToLower(key)
 		switch key {
 		case "rwfstype":
 			// Check if read-write filesystem is available
