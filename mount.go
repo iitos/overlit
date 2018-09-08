@@ -29,11 +29,11 @@ type mountOptions struct {
 	Flag   uint32
 }
 
-func mountFrom(dir, device, target, mType string, flags uintptr, label string) error {
+func mountFrom(dir, device, target, fstype string, flags uintptr, label string) error {
 	options := &mountOptions{
 		Device: device,
 		Target: target,
-		Type:   mType,
+		Type:   fstype,
 		Flag:   uint32(flags),
 		Label:  label,
 	}

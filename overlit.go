@@ -25,7 +25,7 @@ import (
 	"github.com/docker/go-units"
 	"github.com/pkg/errors"
 
-	graphhelper "github.com/docker/go-plugins-helpers/graphdriver"
+	gdhelper "github.com/docker/go-plugins-helpers/graphdriver"
 	rsystem "github.com/opencontainers/runc/libcontainer/system"
 
 	"github.com/opencontainers/selinux/go-selinux/label"
@@ -160,6 +160,19 @@ func (d *overlitDriver) getRootIdentity() (idtools.Identity, int, int, error) {
 	root := idtools.Identity{UID: rootUID, GID: rootGID}
 
 	return root, rootUID, rootGID, nil
+}
+
+func getGDHelperChanges(_changes []archive.Change) ([]gdhelper.Change, error) {
+	changes := make([]gdhelper.Change, len(_changes))
+
+	for i, _change := range _changes {
+		changes[i] = gdhelper.Change{
+			Path: _change.Path,
+			Kind: gdhelper.ChangeKind(_change.Kind),
+		}
+	}
+
+	return changes, nil
 }
 
 func (d *overlitDriver) execCommands(cmds string) error {
@@ -550,7 +563,7 @@ func (d *overlitDriver) GetMetadata(id string) (map[string]string, error) {
 		"UpperDir":  d.getDiffPath(dir),
 	}
 
-	var lowerDirs []string
+	var lowers []string
 
 	lower, err := ioutil.ReadFile(d.getLowerPath(dir))
 	if err == nil {
@@ -559,14 +572,14 @@ func (d *overlitDriver) GetMetadata(id string) (map[string]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			lowerDirs = append(lowerDirs, path.Clean(path.Join(d.home, linkDir, lp)))
+			lowers = append(lowers, path.Clean(path.Join(d.home, linkDir, lp)))
 		}
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
 
-	if len(lowerDirs) > 0 {
-		metadata["LowerDir"] = strings.Join(lowerDirs, ":")
+	if len(lowers) > 0 {
+		metadata["LowerDir"] = strings.Join(lowers, ":")
 	}
 
 	return metadata, nil
@@ -600,7 +613,7 @@ func (d *overlitDriver) Diff(id, parent string) io.ReadCloser {
 	return diff
 }
 
-func (d *overlitDriver) Changes(id, parent string) ([]graphhelper.Change, error) {
+func (d *overlitDriver) Changes(id, parent string) ([]gdhelper.Change, error) {
 	log.Printf("overlit: changes (id = %s, parent = %s)\n", id, parent)
 
 	dir := d.getHomePath(id)
@@ -614,21 +627,12 @@ func (d *overlitDriver) Changes(id, parent string) ([]graphhelper.Change, error)
 		parentPath = d.getDiffPath(pdir)
 	}
 
-	_changes, err := archive.ChangesDirs(diffPath, parentPath)
+	changes, err := archive.ChangesDirs(diffPath, parentPath)
 	if err != nil {
 		return nil, err
 	}
 
-	changes := make([]graphhelper.Change, len(_changes))
-
-	for i, _change := range _changes {
-		changes[i] = graphhelper.Change{
-			Path: _change.Path,
-			Kind: graphhelper.ChangeKind(_change.Kind),
-		}
-	}
-
-	return changes, nil
+	return getGDHelperChanges(changes)
 }
 
 func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, error) {
