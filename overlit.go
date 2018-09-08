@@ -124,6 +124,29 @@ func parseRWFSOptions(options map[string]string) (fstype string, fssize uint64, 
 	return
 }
 
+func getGDHelperChanges(_changes []archive.Change) ([]gdhelper.Change, error) {
+	changes := make([]gdhelper.Change, len(_changes))
+
+	for i, _change := range _changes {
+		changes[i] = gdhelper.Change{
+			Path: _change.Path,
+			Kind: gdhelper.ChangeKind(_change.Kind),
+		}
+	}
+
+	return changes, nil
+}
+
+func getAbsPaths(dir string, _paths []string) []string {
+	paths := make([]string, len(_paths))
+
+	for i, s := range _paths {
+		paths[i] = path.Join(dir, s)
+	}
+
+	return paths
+}
+
 func (d *overlitDriver) getHomePath(id string) string {
 	return path.Join(d.home, id)
 }
@@ -168,29 +191,6 @@ func (d *overlitDriver) getRootIdentity() (idtools.Identity, int, int, error) {
 	root := idtools.Identity{UID: rootUID, GID: rootGID}
 
 	return root, rootUID, rootGID, nil
-}
-
-func getGDHelperChanges(_changes []archive.Change) ([]gdhelper.Change, error) {
-	changes := make([]gdhelper.Change, len(_changes))
-
-	for i, _change := range _changes {
-		changes[i] = gdhelper.Change{
-			Path: _change.Path,
-			Kind: gdhelper.ChangeKind(_change.Kind),
-		}
-	}
-
-	return changes, nil
-}
-
-func getAbsPaths(dir string, _paths []string) []string {
-	paths := make([]string, len(_paths))
-
-	for i, s := range _paths {
-		paths[i] = path.Join(dir, s)
-	}
-
-	return paths
 }
 
 func (d *overlitDriver) execCommands(cmds string) error {
