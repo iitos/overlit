@@ -76,8 +76,8 @@ func dmTaskDestroy(task *dmTask) {
 }
 
 func dmTaskRun(task *dmTask) int {
-	ret, _ := C.dm_task_run((*C.struct_dm_task)(task))
-	return int(ret)
+	res, _ := C.dm_task_run((*C.struct_dm_task)(task))
+	return int(res)
 }
 
 func dmTaskSetName(task *dmTask, name string) int {
