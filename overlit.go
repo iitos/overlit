@@ -183,6 +183,16 @@ func getGDHelperChanges(_changes []archive.Change) ([]gdhelper.Change, error) {
 	return changes, nil
 }
 
+func getAbsPaths(dir string, _paths []string) []string {
+	paths := make([]string, len(_paths))
+
+	for i, s := range _paths {
+		paths[i] = path.Join(dir, s)
+	}
+
+	return paths
+}
+
 func (d *overlitDriver) execCommands(cmds string) error {
 	for _, cmd := range strings.Split(cmds, ":") {
 		args := strings.Split(cmd, ",")
@@ -459,12 +469,8 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 		}
 	}()
 
-	splitLowers := strings.Split(string(lower), ":")
-	absLowers := make([]string, len(splitLowers))
-	for i, s := range splitLowers {
-		absLowers[i] = path.Join(d.home, s)
-	}
-	opts := fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", strings.Join(absLowers, ":"), d.getDiffPath(dir), d.getWorkPath(dir))
+	lowers := strings.Split(string(lower), ":")
+	opts := fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", strings.Join(getAbsPaths(d.home, lowers), ":"), d.getDiffPath(dir), d.getWorkPath(dir))
 	mountData := label.FormatMountLabel(opts, mountLabel)
 	mount := unix.Mount
 	mountTarget := mergedPath
