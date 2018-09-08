@@ -47,6 +47,8 @@ const (
 	idLength   = 26
 )
 
+var pageSize int = 4096
+
 type overlitOptions struct {
 	DevName    string
 	GroupName  string
@@ -69,6 +71,14 @@ type overlitDriver struct {
 	locker *locker.Locker
 
 	dmtool *DmTool
+}
+
+func init() {
+	pageSize := unix.Getpagesize()
+
+	if pageSize > 4096 {
+		pageSize = 4096
+	}
 }
 
 func parseOptions(options []string) (*overlitOptions, error) {
@@ -481,12 +491,6 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 	}
 	if err := idtools.MkdirAndChown(mergedPath, 0700, root); err != nil {
 		return nil, err
-	}
-
-	pageSize := unix.Getpagesize()
-
-	if pageSize > 4096 {
-		pageSize = 4096
 	}
 
 	if len(mountData) > pageSize {
