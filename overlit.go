@@ -307,7 +307,6 @@ func (d *overlitDriver) Create(id, parent, mountLabel string, storageOpt map[str
 	if err := d.createHomeDir(id, parent, root); err != nil {
 		return err
 	}
-
 	defer func() {
 		if rerr != nil {
 			os.RemoveAll(dir)
@@ -330,8 +329,6 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 
 	dir := d.getHomePath(id)
 
-	hasDevice := false
-
 	root, _, _, err := d.getRootIdentity()
 	if err != nil {
 		return err
@@ -340,13 +337,8 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 	if err := d.createHomeDir(id, parent, root); err != nil {
 		return err
 	}
-
 	defer func() {
 		if rerr != nil {
-			if hasDevice {
-				d.dmtool.DeleteDevice(id)
-			}
-
 			os.RemoveAll(dir)
 		}
 	}()
@@ -360,10 +352,15 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 		if err := d.dmtool.CreateDevice(id); err != nil {
 			return errors.New("could not create device")
 		}
+		defer func() {
+			if rerr != nil {
+				d.dmtool.DeleteDevice(id)
+			}
+		}()
+
 		if err := d.dmtool.ResizeDevice(id, fssize); err != nil {
 			return errors.New("could not resize device")
 		}
-		hasDevice = true
 
 		if err := d.execCommands(fmt.Sprintf("mkfs.%v,%v", fstype, devPath)); err != nil {
 			return err
