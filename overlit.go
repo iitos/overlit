@@ -250,9 +250,6 @@ func (d *overlitDriver) createSubDir(id, parent string, root idtools.Identity, f
 	}
 
 	pdir := d.getHomePath(parent)
-	if _, err := os.Lstat(pdir); err != nil {
-		return err
-	}
 
 	plink, err := ioutil.ReadFile(d.getLinkPath(pdir))
 	if err != nil {
@@ -436,9 +433,6 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 	defer d.locker.Unlock(id)
 
 	dir := d.getHomePath(id)
-	if _, err := os.Stat(dir); err != nil {
-		return nil, err
-	}
 
 	lower, err := ioutil.ReadFile(d.getLowerPath(dir))
 	if err != nil {
@@ -561,9 +555,6 @@ func (d *overlitDriver) GetMetadata(id string) (map[string]string, error) {
 	log.Printf("overlit: getmetadata (id = %s)\n", id)
 
 	dir := d.getHomePath(id)
-	if _, err := os.Stat(dir); err != nil {
-		return nil, err
-	}
 
 	metadata := map[string]string{
 		"WorkDir":   d.getWorkPath(dir),
