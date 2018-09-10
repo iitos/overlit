@@ -22,5 +22,5 @@ func checkFSAvailable(fstype string) error {
 		}
 	}
 
-	return errors.New("not supported overlay filesystem")
+	return errors.Errorf("not supported %v filesystem", fstype)
 }
