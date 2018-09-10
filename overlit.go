@@ -39,7 +39,6 @@ const (
 	tarsDir    = "tars"
 	linkFile   = "link"
 	lowerFile  = "lower"
-	fsysFile   = "fsys"
 	workDir    = "work"
 	mergedDir  = "merged"
 	configFile = "dmtool.json"
@@ -177,10 +176,6 @@ func (d *overlitDriver) getLowerPath(home string) string {
 	return path.Join(home, lowerFile)
 }
 
-func (d *overlitDriver) getFsysPath(home string) string {
-	return path.Join(home, fsysFile)
-}
-
 func (d *overlitDriver) getWorkPath(home string) string {
 	return path.Join(home, workDir)
 }
@@ -231,12 +226,11 @@ func (d *overlitDriver) createHomeDir(id, parent string, root idtools.Identity) 
 	return nil
 }
 
-func (d *overlitDriver) createSubDir(id, parent string, root idtools.Identity, fstype string) error {
+func (d *overlitDriver) createSubDir(id, parent string, root idtools.Identity) error {
 	dir := d.getHomePath(id)
 	tarsPath := d.getTarsPath(dir)
 	diffPath := d.getDiffPath(dir)
 	linkPath := d.getLinkPath(dir)
-	fsysPath := d.getFsysPath(dir)
 	workPath := d.getWorkPath(dir)
 
 	lid := generateID(idLength)
@@ -254,10 +248,6 @@ func (d *overlitDriver) createSubDir(id, parent string, root idtools.Identity, f
 	}
 
 	if err := ioutil.WriteFile(linkPath, []byte(lid), 0644); err != nil {
-		return err
-	}
-
-	if err := ioutil.WriteFile(fsysPath, []byte(fstype), 0644); err != nil {
 		return err
 	}
 
@@ -316,17 +306,11 @@ func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []i
 		return err
 	}
 
-	for devname, _ := range d.dmtool.Devices {
-		dir := d.getHomePath(devname)
-		diffPath := d.getDiffPath(dir)
-		fsysPath := d.getFsysPath(dir)
+	for devname, device := range d.dmtool.Devices {
 		devPath := d.getDevPath(devname)
 
-		fstype, err := ioutil.ReadFile(fsysPath)
-		if err == nil && len(fstype) > 0 {
-			if err := unix.Mount(devPath, diffPath, string(fstype), 0, ""); err != nil {
-				return err
-			}
+		if err := unix.Mount(devPath, device.MntPath, device.FsType, 0, ""); err != nil {
+			return err
 		}
 	}
 
@@ -352,7 +336,7 @@ func (d *overlitDriver) Create(id, parent, mountLabel string, storageOpt map[str
 		}
 	}()
 
-	if err := d.createSubDir(id, parent, root, d.options.RofsType); err != nil {
+	if err := d.createSubDir(id, parent, root); err != nil {
 		return err
 	}
 
@@ -408,9 +392,13 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 		if err := unix.Mount(devPath, dir, fstype, 0, ""); err != nil {
 			return err
 		}
+
+		if err := d.dmtool.SetDeviceConfig(id, fstype, dir); err != nil {
+			return err
+		}
 	}
 
-	if err := d.createSubDir(id, parent, root, ""); err != nil {
+	if err := d.createSubDir(id, parent, root); err != nil {
 		return err
 	}
 
@@ -433,9 +421,8 @@ func (d *overlitDriver) Remove(id string) error {
 	}
 
 	// Unmount and delete the device if this layer has a logical volume device
-	devPath := d.getDevPath(id)
-	if _, err := os.Stat(devPath); err == nil {
-		unix.Unmount(devPath, unix.MNT_DETACH)
+	if _, mntpath, err := d.dmtool.GetDeviceConfig(id); err == nil {
+		mount.RecursiveUnmount(mntpath)
 		d.dmtool.DeleteDevice(id)
 	}
 
@@ -677,6 +664,10 @@ func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, err
 	}
 
 	if err := unix.Mount(devPath, diffPath, d.options.RofsType, 0, ""); err != nil {
+		return 0, err
+	}
+
+	if err := d.dmtool.SetDeviceConfig(id, d.options.RofsType, d.getDiffPath(dir)); err != nil {
 		return 0, err
 	}
 

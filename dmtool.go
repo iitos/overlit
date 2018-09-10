@@ -17,6 +17,8 @@ import (
 type DmDevice struct {
 	Targets []uint64 `json:"targets"`
 	Extents uint64   `json:"extents"`
+	FsType  string   `json:"fstype"`
+	MntPath string   `json:"mntpath"`
 }
 
 type DmTool struct {
@@ -253,49 +255,73 @@ func (d *DmTool) CreateDevice(name string) error {
 }
 
 func (d *DmTool) DeleteDevice(name string) error {
-	device := d.Devices[name]
+	if device, ok := d.Devices[name]; ok {
+		for _, target := range device.Targets {
+			start, count := getTarget(target)
 
-	for _, target := range device.Targets {
-		start, count := getTarget(target)
+			d.clearExtents(start, count)
+		}
 
-		d.clearExtents(start, count)
+		return d.detachDevice(name)
 	}
 
-	return d.detachDevice(name)
+	return errors.Errorf("has no %v device", name)
 }
 
 func (d *DmTool) ResizeDevice(name string, size uint64) error {
-	device := d.Devices[name]
-	device.Extents = getMaxUint64(uint64(math.Ceil(float64(size/d.ExtentSize))), 1)
-	device.Targets = nil
+	if device, ok := d.Devices[name]; ok {
+		device.Extents = getMaxUint64(uint64(math.Ceil(float64(size/d.ExtentSize))), 1)
+		device.Targets = nil
 
-	remains := device.Extents
+		remains := device.Extents
 
-	for remains > 0 {
-		start, count, offset := d.findExtents(getMinUint64(remains, 255), d.lastextent)
-		if count == 0 {
-			if offset >= d.extents {
-				d.lastextent = 0
-				continue
+		for remains > 0 {
+			start, count, offset := d.findExtents(getMinUint64(remains, 255), d.lastextent)
+			if count == 0 {
+				if offset >= d.extents {
+					d.lastextent = 0
+					continue
+				}
+
+				return errors.New("count not resize device")
 			}
 
-			return errors.New("count not resize device")
+			device.Targets = append(device.Targets, start<<8|count)
+
+			remains -= count
+			d.lastextent = offset
 		}
 
-		device.Targets = append(device.Targets, start<<8|count)
+		if err := d.reloadDevice(name); err != nil {
+			return err
+		}
+		if err := d.resumeDevice(name); err != nil {
+			return err
+		}
 
-		remains -= count
-		d.lastextent = offset
+		return nil
 	}
 
-	if err := d.reloadDevice(name); err != nil {
-		return err
-	}
-	if err := d.resumeDevice(name); err != nil {
-		return err
+	return errors.Errorf("has no %v device", name)
+}
+
+func (d *DmTool) SetDeviceConfig(name, fstype, mntpath string) error {
+	if device, ok := d.Devices[name]; ok {
+		device.FsType = fstype
+		device.MntPath = mntpath
+
+		return nil
 	}
 
-	return nil
+	return errors.Errorf("has no %v device", name)
+}
+
+func (d *DmTool) GetDeviceConfig(name string) (string, string, error) {
+	if device, ok := d.Devices[name]; ok {
+		return device.FsType, device.MntPath, nil
+	}
+
+	return "", "", errors.Errorf("has no %v device", name)
 }
 
 func NewDmTool() *DmTool {
