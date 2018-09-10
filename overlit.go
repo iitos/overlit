@@ -310,7 +310,11 @@ func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []i
 		devPath := d.getDevPath(devname)
 
 		if err := unix.Mount(devPath, device.MntPath, device.FsType, 0, ""); err != nil {
-			return err
+			if !os.IsNotExist(err) {
+				return err
+			}
+
+			d.dmtool.DeleteDevice(devname)
 		}
 	}
 
