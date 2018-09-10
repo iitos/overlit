@@ -400,6 +400,10 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 		if err := d.dmtool.SetDeviceConfig(id, fstype, dir); err != nil {
 			return err
 		}
+
+		if err := d.dmtool.Flush(); err != nil {
+			return err
+		}
 	}
 
 	if err := d.createSubDir(id, parent, root); err != nil {
@@ -672,6 +676,10 @@ func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, err
 	}
 
 	if err := d.dmtool.SetDeviceConfig(id, d.options.RofsType, d.getDiffPath(dir)); err != nil {
+		return 0, err
+	}
+
+	if err := d.dmtool.Flush(); err != nil {
 		return 0, err
 	}
 
