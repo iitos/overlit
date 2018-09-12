@@ -405,6 +405,10 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 			return err
 		}
 
+		if err := d.dmtool.SetDeviceReadonly(id, false); err != nil {
+			return err
+		}
+
 		if err := d.dmtool.Flush(); err != nil {
 			return err
 		}
@@ -452,6 +456,12 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 	defer d.locker.Unlock(id)
 
 	dir := d.getHomePath(id)
+
+	if readonly, err := d.dmtool.GetDeviceReadonly(id); err == nil {
+		if readonly == true {
+			return containerfs.NewLocalContainerFS(d.getDiffPath(id)), nil
+		}
+	}
 
 	lower, err := ioutil.ReadFile(d.getLowerPath(dir))
 	if err != nil {
@@ -523,6 +533,12 @@ func (d *overlitDriver) Put(id string) error {
 	defer d.locker.Unlock(id)
 
 	dir := d.getHomePath(id)
+
+	if readonly, err := d.dmtool.GetDeviceReadonly(id); err == nil {
+		if readonly == true {
+			return nil
+		}
+	}
 
 	_, err := ioutil.ReadFile(d.getLowerPath(dir))
 	if err != nil {
@@ -684,6 +700,10 @@ func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, err
 	}
 
 	if err := d.dmtool.SetDeviceMntPath(id, d.getDiffPath(dir)); err != nil {
+		return 0, err
+	}
+
+	if err := d.dmtool.SetDeviceReadonly(id, true); err != nil {
 		return 0, err
 	}
 

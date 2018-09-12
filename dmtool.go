@@ -15,10 +15,11 @@ import (
 )
 
 type DmDevice struct {
-	Targets []uint64 `json:"targets"`
-	Extents uint64   `json:"extents"`
-	FsType  string   `json:"fstype"`
-	MntPath string   `json:"mntpath"`
+	Targets  []uint64 `json:"targets"`
+	Extents  uint64   `json:"extents"`
+	FsType   string   `json:"fstype"`
+	MntPath  string   `json:"mntpath"`
+	Readonly bool     `json:"readonly"`
 }
 
 type DmTool struct {
@@ -325,6 +326,16 @@ func (d *DmTool) SetDeviceMntPath(name, mntpath string) error {
 	return errors.Errorf("has no %v device", name)
 }
 
+func (d *DmTool) SetDeviceReadonly(name string, readonly bool) error {
+	if device, ok := d.Devices[name]; ok {
+		device.Readonly = readonly
+
+		return nil
+	}
+
+	return errors.Errorf("has no %v device", name)
+}
+
 func (d *DmTool) GetDeviceFsType(name string) (string, error) {
 	if device, ok := d.Devices[name]; ok {
 		return device.FsType, nil
@@ -339,6 +350,14 @@ func (d *DmTool) GetDeviceMntPath(name string) (string, error) {
 	}
 
 	return "", errors.Errorf("has no %v device", name)
+}
+
+func (d *DmTool) GetDeviceReadonly(name string) (bool, error) {
+	if device, ok := d.Devices[name]; ok {
+		return device.Readonly, nil
+	}
+
+	return true, errors.Errorf("has no %v device", name)
 }
 
 func NewDmTool() *DmTool {
