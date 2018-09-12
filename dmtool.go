@@ -305,9 +305,18 @@ func (d *DmTool) ResizeDevice(name string, size uint64) error {
 	return errors.Errorf("has no %v device", name)
 }
 
-func (d *DmTool) SetDeviceConfig(name, fstype, mntpath string) error {
+func (d *DmTool) SetDeviceFsType(name, fstype string) error {
 	if device, ok := d.Devices[name]; ok {
 		device.FsType = fstype
+
+		return nil
+	}
+
+	return errors.Errorf("has no %v device", name)
+}
+
+func (d *DmTool) SetDeviceMntPath(name, mntpath string) error {
+	if device, ok := d.Devices[name]; ok {
 		device.MntPath = mntpath
 
 		return nil
@@ -316,12 +325,20 @@ func (d *DmTool) SetDeviceConfig(name, fstype, mntpath string) error {
 	return errors.Errorf("has no %v device", name)
 }
 
-func (d *DmTool) GetDeviceConfig(name string) (string, string, error) {
+func (d *DmTool) GetDeviceFsType(name string) (string, error) {
 	if device, ok := d.Devices[name]; ok {
-		return device.FsType, device.MntPath, nil
+		return device.FsType, nil
 	}
 
-	return "", "", errors.Errorf("has no %v device", name)
+	return "", errors.Errorf("has no %v device", name)
+}
+
+func (d *DmTool) GetDeviceMntPath(name string) (string, error) {
+	if device, ok := d.Devices[name]; ok {
+		return device.MntPath, nil
+	}
+
+	return "", errors.Errorf("has no %v device", name)
 }
 
 func NewDmTool() *DmTool {

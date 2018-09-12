@@ -397,7 +397,11 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 			return err
 		}
 
-		if err := d.dmtool.SetDeviceConfig(id, fstype, dir); err != nil {
+		if err := d.dmtool.SetDeviceFsType(id, fstype); err != nil {
+			return err
+		}
+
+		if err := d.dmtool.SetDeviceMntPath(id, dir); err != nil {
 			return err
 		}
 
@@ -429,7 +433,7 @@ func (d *overlitDriver) Remove(id string) error {
 	}
 
 	// Unmount and delete the device if this layer has a logical volume device
-	if _, mntpath, err := d.dmtool.GetDeviceConfig(id); err == nil {
+	if mntpath, err := d.dmtool.GetDeviceMntPath(id); err == nil {
 		mount.RecursiveUnmount(mntpath)
 		d.dmtool.DeleteDevice(id)
 	}
@@ -675,7 +679,11 @@ func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, err
 		return 0, err
 	}
 
-	if err := d.dmtool.SetDeviceConfig(id, d.options.RofsType, d.getDiffPath(dir)); err != nil {
+	if err := d.dmtool.SetDeviceFsType(id, d.options.RofsType); err != nil {
+		return 0, err
+	}
+
+	if err := d.dmtool.SetDeviceMntPath(id, d.getDiffPath(dir)); err != nil {
 		return 0, err
 	}
 
