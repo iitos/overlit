@@ -733,7 +733,7 @@ func (d *overlitDriver) DiffSize(id, parent string) (int64, error) {
 func (d *overlitDriver) Capabilities() graphdriver.Capabilities {
 	log.Printf("overlit: capabilities\n")
 
-	return graphdriver.Capabilities{}
+	return graphdriver.Capabilities{ReproducesExactDiffs: true}
 }
 
 func NewOverlitDriver(options []string) (*overlitDriver, error) {
