@@ -22,6 +22,7 @@ func main() {
 	var rofsRate float64
 	var rofsCmd0 string
 	var rofsCmd1 string
+	var pushTar bool
 
 	flag.StringVar(&devName, "devname", "_", "devmapper device name")
 	flag.StringVar(&groupName, "groupname", "docker", "devmapper group name")
@@ -30,6 +31,7 @@ func main() {
 	flag.Float64Var(&rofsRate, "rofsrate", 1.2, "filesystem rate for read-only layer")
 	flag.StringVar(&rofsCmd0, "rofscmd0", "mkraonfs.py,-s,{tars},-t,{dev}", "precommands for read-only layer")
 	flag.StringVar(&rofsCmd1, "rofscmd1", "", "postcommands for read-only layer")
+	flag.BoolVar(&pushTar, "pushtar", false, "push layer as tarball")
 	flag.Parse()
 
 	options := []string{}
@@ -40,6 +42,7 @@ func main() {
 	options = append(options, fmt.Sprintf("rofsrate=%f", rofsRate))
 	options = append(options, fmt.Sprintf("rofscmd0=%s", rofsCmd0))
 	options = append(options, fmt.Sprintf("rofscmd1=%s", rofsCmd1))
+	options = append(options, fmt.Sprintf("pushtar=%t", pushTar))
 
 	d, err := NewOverlitDriver(options)
 	if err != nil {

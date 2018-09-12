@@ -56,6 +56,7 @@ type overlitOptions struct {
 	RofsRate   float64
 	RofsCmd0   string
 	RofsCmd1   string
+	PushTar    bool
 }
 
 type overlitDriver struct {
@@ -104,6 +105,8 @@ func parseOptions(options []string) (*overlitOptions, error) {
 			opts.RofsCmd0 = val
 		case "rofscmd1":
 			opts.RofsCmd1 = val
+		case "pushtar":
+			opts.PushTar, _ = strconv.ParseBool(val)
 		default:
 			return nil, fmt.Errorf("overlit: Unknown option (%s = %s)", key, val)
 		}
@@ -625,6 +628,18 @@ func (d *overlitDriver) Diff(id, parent string) io.ReadCloser {
 	log.Printf("overlit: diff (id = %s, parent = %s)\n", id, parent)
 
 	dir := d.getHomePath(id)
+
+	if err := d.dmtool.HasDevice(id); err == nil && !d.options.PushTar {
+		devPath := d.getDevPath(id)
+
+		f, err := os.Open(devPath)
+		if err != nil {
+			return nil
+		}
+
+		return f
+	}
+
 	diffPath := d.getDiffPath(dir)
 
 	diff, _ := archive.TarWithOptions(diffPath, &archive.TarOptions{

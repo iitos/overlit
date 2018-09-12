@@ -306,6 +306,14 @@ func (d *DmTool) ResizeDevice(name string, size uint64) error {
 	return errors.Errorf("has no %v device", name)
 }
 
+func (d *DmTool) HasDevice(name string) error {
+	if _, ok := d.Devices[name]; ok {
+		return nil
+	}
+
+	return errors.Errorf("has no %v device", name)
+}
+
 func (d *DmTool) SetDeviceFsType(name, fstype string) error {
 	if device, ok := d.Devices[name]; ok {
 		device.FsType = fstype
