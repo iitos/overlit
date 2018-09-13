@@ -15,11 +15,13 @@ import (
 )
 
 type DmDevice struct {
-	Targets  []uint64 `json:"targets"`
-	Extents  uint64   `json:"extents"`
-	FsType   string   `json:"fstype"`
-	MntPath  string   `json:"mntpath"`
-	Readonly bool     `json:"readonly"`
+	Targets     []uint64 `json:"targets"`
+	Extents     uint64   `json:"extents"`
+	FsType      string   `json:"fstype"`
+	MntPath     string   `json:"mntpath"`
+	Readonly    bool     `json:"readonly"`
+	ExtentStart uint64   `json:"extentstart"`
+	ExtentCount uint64   `json:"extentcount"`
 }
 
 type DmTool struct {
@@ -29,7 +31,6 @@ type DmTool struct {
 
 	extentbits *bitset.BitSet
 	extents    uint64
-	lastextent uint64
 
 	jsonpath string
 }
@@ -45,9 +46,8 @@ func getTarget(target uint64) (start, count uint64) {
 	return
 }
 
-func (d *DmTool) findExtents(extents, offset uint64) (uint64, uint64, uint64) {
-	start := uint64(0)
-	count := uint64(0)
+func (d *DmTool) findExtents(start, count, extents, offset uint64) (uint64, uint64, uint64, uint64) {
+	ncount := uint64(0)
 
 	for count < extents {
 		index, found := d.extentbits.NextClear(uint(offset + 1))
@@ -64,9 +64,10 @@ func (d *DmTool) findExtents(extents, offset uint64) (uint64, uint64, uint64) {
 
 		offset = uint64(index)
 		count++
+		ncount++
 	}
 
-	return start, count, offset
+	return start, count, ncount, offset
 }
 
 func (d *DmTool) setExtents(offset, count uint64) error {
@@ -185,9 +186,10 @@ func (d *DmTool) Setup(devpath string, extentsize uint64, jsonpath string) error
 				for _, target := range device.Targets {
 					start, count := getTarget(target)
 
-					d.setExtents(start, count)
+					device.ExtentStart = start
+					device.ExtentCount = count
 
-					d.lastextent = start + count
+					d.setExtents(start, count)
 				}
 
 				if res := d.checkDevice(devname); res == 0 {
@@ -271,36 +273,53 @@ func (d *DmTool) DeleteDevice(name string) error {
 
 func (d *DmTool) ResizeDevice(name string, size uint64) error {
 	if device, ok := d.Devices[name]; ok {
-		device.Extents = getMaxUint64(uint64(math.Ceil(float64(size/d.ExtentSize))), 1)
-		device.Targets = nil
+		extents := getMaxUint64(uint64(math.Ceil(float64(size/d.ExtentSize))), 1)
+		if extents == device.Extents {
+			return nil
+		}
+		if extents > device.Extents {
+			remains := device.ExtentCount + (extents - device.Extents)
+			estart := device.ExtentStart
+			ecount := device.ExtentCount
+			eoffset := estart + ecount
 
-		remains := device.Extents
+			for remains > 0 {
+				start, count, ncount, offset := d.findExtents(estart, ecount, getMinUint64(remains, 255), eoffset)
+				if ncount == 0 {
+					if eoffset == 0 {
+						return errors.New("could not resize device")
+					}
 
-		for remains > 0 {
-			start, count, offset := d.findExtents(getMinUint64(remains, 255), d.lastextent)
-			if count == 0 {
-				if offset >= d.extents {
-					d.lastextent = 0
+					eoffset = 0
 					continue
 				}
 
-				return errors.New("count not resize device")
+				if ecount > 0 {
+					device.Targets[len(device.Targets)-1] = start<<8 | count
+				} else {
+					device.Targets = append(device.Targets, start<<8|count)
+				}
+
+				device.ExtentStart = start
+				device.ExtentCount = count
+
+				remains -= count
+				eoffset = offset
+				estart = 0
+				ecount = 0
 			}
 
-			device.Targets = append(device.Targets, start<<8|count)
+			if err := d.reloadDevice(name); err != nil {
+				return err
+			}
+			if err := d.resumeDevice(name); err != nil {
+				return err
+			}
 
-			remains -= count
-			d.lastextent = offset
-		}
+			device.Extents = extents
 
-		if err := d.reloadDevice(name); err != nil {
-			return err
+			return nil
 		}
-		if err := d.resumeDevice(name); err != nil {
-			return err
-		}
-
-		return nil
 	}
 
 	return errors.Errorf("has no %v device", name)

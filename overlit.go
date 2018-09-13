@@ -771,12 +771,6 @@ func (d *overlitDriver) applyRaonFS(id, parent string, diff io.Reader) (int64, e
 	diffPath := d.getDiffPath(dir)
 	devPath := d.getDevPath(id)
 
-	r := bufio.NewReader(diff)
-
-	if err := d.dmtool.ResizeDevice(id, d.options.ExtentSize); err != nil {
-		return 0, err
-	}
-
 	size := int64(0)
 
 	t, err := os.Create(devPath)
@@ -785,6 +779,7 @@ func (d *overlitDriver) applyRaonFS(id, parent string, diff io.Reader) (int64, e
 	}
 	defer t.Close()
 
+	r := bufio.NewReader(diff)
 	w := bufio.NewWriter(t)
 
 	buf := make([]byte, d.options.ExtentSize)
@@ -797,13 +792,15 @@ func (d *overlitDriver) applyRaonFS(id, parent string, diff io.Reader) (int64, e
 			break
 		}
 
+		if err := d.dmtool.ResizeDevice(id, uint64(size)+d.options.ExtentSize); err != nil {
+			return 0, err
+		}
+
 		if _, err := w.Write(buf[:n]); err != nil {
 			return 0, err
 		}
 
 		size += int64(n)
-
-		break
 	}
 
 	if err := w.Flush(); err != nil {
