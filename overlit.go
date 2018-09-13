@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -21,6 +23,7 @@ import (
 	"github.com/docker/docker/pkg/locker"
 	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/pkg/parsers"
+	"github.com/docker/docker/pkg/pools"
 	"github.com/docker/docker/pkg/system"
 	"github.com/docker/go-units"
 	"github.com/pkg/errors"
@@ -44,6 +47,11 @@ const (
 	configFile = "dmtool.json"
 	maxDepth   = 128
 	idLength   = 26
+)
+
+const (
+	packedImage = iota
+	raonFsImage
 )
 
 var pageSize int = 4096
@@ -288,6 +296,21 @@ func (d *overlitDriver) createSubDir(id, parent string, root idtools.Identity) e
 	return nil
 }
 
+func (d *overlitDriver) detectImage(source []byte) int {
+	for image, magic := range map[int][]byte{
+		raonFsImage: {0x52, 0x41, 0x4f, 0x4e},
+	} {
+		if len(source) < len(magic) {
+			continue
+		}
+		if bytes.Equal(magic, source[:len(magic)]) {
+			return image
+		}
+	}
+
+	return packedImage
+}
+
 func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []idtools.IDMap) error {
 	log.Printf("overlit: init (home = %s)\n", home)
 
@@ -441,8 +464,10 @@ func (d *overlitDriver) Remove(id string) error {
 
 	// Unmount and delete the device if this layer has a logical volume device
 	if mntpath, err := d.dmtool.GetDeviceMntPath(id); err == nil {
-		mount.RecursiveUnmount(mntpath)
-		d.dmtool.DeleteDevice(id)
+		if mntpath != "" {
+			mount.RecursiveUnmount(mntpath)
+		}
+		//d.dmtool.DeleteDevice(id)
 	}
 
 	if err := system.EnsureRemoveAll(dir); err != nil && !os.IsNotExist(err) {
@@ -674,8 +699,8 @@ func (d *overlitDriver) Changes(id, parent string) ([]gdhelper.Change, error) {
 	return getGDHelperChanges(changes)
 }
 
-func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, error) {
-	log.Printf("overlit: applydiff (id = %s, parent = %s)\n", id, parent)
+func (d *overlitDriver) applyTar(id, parent string, diff io.Reader) (int64, error) {
+	log.Printf("overlit: applytar (id = %s, parent = %s)\n", id, parent)
 
 	dir := d.getHomePath(id)
 	tarsPath := d.getTarsPath(dir)
@@ -714,7 +739,7 @@ func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, err
 		return 0, err
 	}
 
-	if err := d.dmtool.SetDeviceMntPath(id, d.getDiffPath(dir)); err != nil {
+	if err := d.dmtool.SetDeviceMntPath(id, diffPath); err != nil {
 		return 0, err
 	}
 
@@ -737,6 +762,96 @@ func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, err
 	log.Printf("overlit: applydiff (size = %v)\n", size)
 
 	return size, nil
+}
+
+func (d *overlitDriver) applyRaonFS(id, parent string, diff io.Reader) (int64, error) {
+	log.Printf("overlit: applyraonfs (id = %s, parent = %s)\n", id, parent)
+
+	dir := d.getHomePath(id)
+	diffPath := d.getDiffPath(dir)
+	devPath := d.getDevPath(id)
+
+	r := bufio.NewReader(diff)
+
+	if err := d.dmtool.ResizeDevice(id, d.options.ExtentSize); err != nil {
+		return 0, err
+	}
+
+	size := int64(0)
+
+	t, err := os.Create(devPath)
+	if err != nil {
+		return 0, err
+	}
+	defer t.Close()
+
+	w := bufio.NewWriter(t)
+
+	buf := make([]byte, d.options.ExtentSize)
+	for {
+		n, err := r.Read(buf)
+		if err != nil && err != io.EOF {
+			return 0, err
+		}
+		if n == 0 {
+			break
+		}
+
+		if _, err := w.Write(buf[:n]); err != nil {
+			return 0, err
+		}
+
+		size += int64(n)
+
+		break
+	}
+
+	if err := w.Flush(); err != nil {
+		return 0, err
+	}
+
+	if err := unix.Mount(devPath, diffPath, d.options.RofsType, 0, ""); err != nil {
+		return 0, err
+	}
+
+	if err := d.dmtool.SetDeviceFsType(id, d.options.RofsType); err != nil {
+		return 0, err
+	}
+
+	if err := d.dmtool.SetDeviceMntPath(id, diffPath); err != nil {
+		return 0, err
+	}
+
+	if err := d.dmtool.SetDeviceReadonly(id, true); err != nil {
+		return 0, err
+	}
+
+	if err := d.dmtool.Flush(); err != nil {
+		return 0, err
+	}
+
+	return size, nil
+}
+
+func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, error) {
+	log.Printf("overlit: applydiff (id = %s, parent = %s)\n", id, parent)
+
+	p := pools.BufioReader32KPool
+	buf := p.Get(diff)
+	bs, err := buf.Peek(10)
+	if err != nil && err != io.EOF {
+		return 0, err
+	}
+
+	image := d.detectImage(bs)
+	switch image {
+	case packedImage:
+		return d.applyTar(id, parent, p.NewReadCloserWrapper(buf, buf))
+	case raonFsImage:
+		return d.applyRaonFS(id, parent, p.NewReadCloserWrapper(buf, buf))
+	}
+
+	return 0, err
 }
 
 func (d *overlitDriver) DiffSize(id, parent string) (int64, error) {
