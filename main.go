@@ -31,7 +31,7 @@ func main() {
 	flag.Float64Var(&rofsRate, "rofsrate", 1.2, "filesystem rate for read-only layer")
 	flag.StringVar(&rofsCmd0, "rofscmd0", "mkraonfs.py,-s,{tars},-t,{dev}", "precommands for read-only layer")
 	flag.StringVar(&rofsCmd1, "rofscmd1", "", "postcommands for read-only layer")
-	flag.BoolVar(&pushTar, "pushtar", false, "push layer as tarball")
+	flag.BoolVar(&pushTar, "pushtar", true, "push layer as tarball")
 	flag.Parse()
 
 	options := []string{}
