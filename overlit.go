@@ -487,14 +487,14 @@ func (d *overlitDriver) Get(id, mountLabel string) (_ containerfs.ContainerFS, r
 
 	if readonly, err := d.dmtool.GetDeviceReadonly(id); err == nil {
 		if readonly == true {
-			return containerfs.NewLocalContainerFS(d.getDiffPath(id)), nil
+			return containerfs.NewLocalContainerFS(d.getDiffPath(dir)), nil
 		}
 	}
 
 	lower, err := ioutil.ReadFile(d.getLowerPath(dir))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return containerfs.NewLocalContainerFS(d.getDiffPath(id)), nil
+			return containerfs.NewLocalContainerFS(d.getDiffPath(dir)), nil
 		}
 		return nil, err
 	}
@@ -852,7 +852,9 @@ func (d *overlitDriver) ApplyDiff(id, parent string, diff io.Reader) (int64, err
 func (d *overlitDriver) DiffSize(id, parent string) (int64, error) {
 	log.Printf("overlit: diffsize (id = %s, parent = %s)\n", id, parent)
 
-	return directory.Size(context.TODO(), d.getDiffPath(id))
+	dir := d.getHomePath(id)
+
+	return directory.Size(context.TODO(), d.getDiffPath(dir))
 }
 
 func (d *overlitDriver) Capabilities() graphdriver.Capabilities {
