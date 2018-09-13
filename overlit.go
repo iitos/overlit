@@ -467,7 +467,7 @@ func (d *overlitDriver) Remove(id string) error {
 		if mntpath != "" {
 			mount.RecursiveUnmount(mntpath)
 		}
-		//d.dmtool.DeleteDevice(id)
+		d.dmtool.DeleteDevice(id)
 	}
 
 	if err := system.EnsureRemoveAll(dir); err != nil && !os.IsNotExist(err) {
