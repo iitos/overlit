@@ -759,8 +759,6 @@ func (d *overlitDriver) applyTar(id, parent string, diff io.Reader) (int64, erro
 		return 0, err
 	}
 
-	log.Printf("overlit: applydiff (size = %v)\n", size)
-
 	return size, nil
 }
 
