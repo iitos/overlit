@@ -223,7 +223,10 @@ func (d *overlitDriver) execCommands(cmds string) error {
 			continue
 		}
 
-		if err := exec.Command(args[0], args[1:]...).Run(); err != nil {
+		log.Printf("overlit: exec(%v)\n", cmd)
+
+		if out, err := exec.Command(args[0], args[1:]...).CombinedOutput(); err != nil {
+			log.Println(string(out))
 			return err
 		}
 	}
