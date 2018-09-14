@@ -132,6 +132,9 @@ func parseRWFSOptions(options map[string]string) (fstype string, fssize uint64, 
 		key = strings.ToLower(key)
 		switch key {
 		case "rwfstype":
+			if val == "_" {
+				return "", 0, nil
+			}
 			// Check if read-write filesystem is available
 			if err := checkFSAvailable(val); err != nil {
 				return "", 0, err
@@ -403,6 +406,10 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 	fstype, fssize, err := parseRWFSOptions(storageOpt)
 	if err != nil {
 		return err
+	} else if fstype == "tmpfs" {
+		if err := unix.Mount("tmpfs", dir, fstype, 0, fmt.Sprintf("size=%v", fssize)); err != nil {
+			return err
+		}
 	} else if fstype != "" {
 		devPath := d.getDevPath(id)
 
