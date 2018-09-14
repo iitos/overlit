@@ -29,7 +29,7 @@ func main() {
 	flag.StringVar(&groupName, "groupname", "docker", "devmapper group name")
 	flag.StringVar(&extentSize, "extentsize", "4M", "devmapper extent size")
 	flag.StringVar(&rofsType, "rofstype", "raonfs", "filesystem type for read-only layer")
-	flag.Float64Var(&rofsRate, "rofsrate", 1.2, "filesystem rate for read-only layer")
+	flag.Float64Var(&rofsRate, "rofsrate", 1.8, "filesystem rate for read-only layer")
 	flag.StringVar(&rofsSize, "rofssize", "0", "filesystem minimum size for read-only layer")
 	flag.StringVar(&rofsCmd0, "rofscmd0", "mkraonfs.py,-s,{tars},-t,{dev}", "precommands for read-only layer")
 	flag.StringVar(&rofsCmd1, "rofscmd1", "", "postcommands for read-only layer")
