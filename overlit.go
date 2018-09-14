@@ -726,6 +726,7 @@ func (d *overlitDriver) applyTar(id, parent string, diff io.Reader) (int64, erro
 	cmd0 := d.options.RofsCmd0
 	cmd0 = strings.Replace(cmd0, "{tars}", tarsPath, -1)
 	cmd0 = strings.Replace(cmd0, "{diff}", diffPath, -1)
+	cmd0 = strings.Replace(cmd0, "{type}", d.options.RofsType, -1)
 	cmd0 = strings.Replace(cmd0, "{dev}", devPath, -1)
 	if err := d.execCommands(cmd0); err != nil {
 		return 0, err
