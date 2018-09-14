@@ -62,6 +62,7 @@ type overlitOptions struct {
 	ExtentSize uint64
 	RofsType   string
 	RofsRate   float64
+	RofsSize   uint64
 	RofsCmd0   string
 	RofsCmd1   string
 	PushTar    bool
@@ -109,6 +110,9 @@ func parseOptions(options []string) (*overlitOptions, error) {
 			opts.RofsType = val
 		case "rofsrate":
 			opts.RofsRate, _ = strconv.ParseFloat(val, 64)
+		case "rofssize":
+			size, _ := units.RAMInBytes(val)
+			opts.RofsSize = uint64(size)
 		case "rofscmd0":
 			opts.RofsCmd0 = val
 		case "rofscmd1":
@@ -719,7 +723,10 @@ func (d *overlitDriver) applyTar(id, parent string, diff io.Reader) (int64, erro
 		return 0, err
 	}
 
-	if err := d.dmtool.ResizeDevice(id, uint64(math.Ceil(float64(size)*d.options.RofsRate))); err != nil {
+	fssize := uint64(math.Ceil(float64(size) * d.options.RofsRate))
+	fssize = getMaxUint64(fssize, d.options.RofsSize)
+
+	if err := d.dmtool.ResizeDevice(id, fssize); err != nil {
 		return 0, err
 	}
 
