@@ -61,6 +61,7 @@ type overlitOptions struct {
 	GroupName  string
 	ExtentSize uint64
 	RofsType   string
+	RofsOpts   string
 	RofsRate   float64
 	RofsSize   uint64
 	RofsCmd0   string
@@ -108,6 +109,8 @@ func parseOptions(options []string) (*overlitOptions, error) {
 			opts.ExtentSize = uint64(size)
 		case "rofstype":
 			opts.RofsType = val
+		case "rofsopts":
+			opts.RofsOpts = val
 		case "rofsrate":
 			opts.RofsRate, _ = strconv.ParseFloat(val, 64)
 		case "rofssize":
@@ -127,24 +130,26 @@ func parseOptions(options []string) (*overlitOptions, error) {
 	return opts, nil
 }
 
-func parseRWFSOptions(options map[string]string) (fstype string, fssize uint64, rerr error) {
+func parseRWFSOptions(options map[string]string) (fstype, fsopts string, fssize uint64, rerr error) {
 	for key, val := range options {
 		key = strings.ToLower(key)
 		switch key {
 		case "rwfstype":
 			if val == "_" {
-				return "", 0, nil
+				return "", "", 0, nil
 			}
 			// Check if read-write filesystem is available
 			if err := checkFSAvailable(val); err != nil {
-				return "", 0, err
+				return "", "", 0, err
 			}
 			fstype = val
+		case "rwfsopts":
+			fsopts = val
 		case "rwfssize":
 			size, _ := units.RAMInBytes(val)
 			fssize = uint64(size)
 		default:
-			return "", 0, errors.Errorf("not supported option (%s = %s)", key, val)
+			return "", "", 0, errors.Errorf("not supported option (%s = %s)", key, val)
 		}
 	}
 
@@ -406,7 +411,7 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 		}
 	}()
 
-	fstype, fssize, err := parseRWFSOptions(storageOpt)
+	fstype, fsopts, fssize, err := parseRWFSOptions(storageOpt)
 	if err != nil {
 		return err
 	} else if fstype == "tmpfs" {
@@ -433,7 +438,7 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 			return err
 		}
 
-		if err := unix.Mount(devPath, dir, fstype, 0, ""); err != nil {
+		if err := unix.Mount(devPath, dir, fstype, 0, fsopts); err != nil {
 			return err
 		}
 
@@ -749,7 +754,7 @@ func (d *overlitDriver) applyTar(id, parent string, diff io.Reader) (int64, erro
 		return 0, err
 	}
 
-	if err := unix.Mount(devPath, diffPath, d.options.RofsType, 0, ""); err != nil {
+	if err := unix.Mount(devPath, diffPath, d.options.RofsType, 0, d.options.RofsOpts); err != nil {
 		return 0, err
 	}
 
@@ -823,7 +828,7 @@ func (d *overlitDriver) applyRaonFS(id, parent string, diff io.Reader) (int64, e
 		return 0, err
 	}
 
-	if err := unix.Mount(devPath, diffPath, d.options.RofsType, 0, ""); err != nil {
+	if err := unix.Mount(devPath, diffPath, d.options.RofsType, 0, d.options.RofsOpts); err != nil {
 		return 0, err
 	}
 

@@ -19,6 +19,7 @@ func main() {
 	var groupName string
 	var extentSize string
 	var rofsType string
+	var rofsOpts string
 	var rofsRate float64
 	var rofsSize string
 	var rofsCmd0 string
@@ -29,6 +30,7 @@ func main() {
 	flag.StringVar(&groupName, "groupname", "docker", "devmapper group name")
 	flag.StringVar(&extentSize, "extentsize", "4M", "devmapper extent size")
 	flag.StringVar(&rofsType, "rofstype", "raonfs", "filesystem type for read-only layer")
+	flag.StringVar(&rofsOpts, "rofsopts", "", "filesystem options for read-only layer")
 	flag.Float64Var(&rofsRate, "rofsrate", 1.8, "filesystem rate for read-only layer")
 	flag.StringVar(&rofsSize, "rofssize", "0", "filesystem minimum size for read-only layer")
 	flag.StringVar(&rofsCmd0, "rofscmd0", "mkraonfs.py,-s,{tars},-t,{dev}", "precommands for read-only layer")
@@ -41,6 +43,7 @@ func main() {
 	options = append(options, fmt.Sprintf("groupname=%s", groupName))
 	options = append(options, fmt.Sprintf("extentsize=%s", extentSize))
 	options = append(options, fmt.Sprintf("rofstype=%s", rofsType))
+	options = append(options, fmt.Sprintf("rofsopts=%s", rofsOpts))
 	options = append(options, fmt.Sprintf("rofsrate=%f", rofsRate))
 	options = append(options, fmt.Sprintf("rofssize=%s", rofsSize))
 	options = append(options, fmt.Sprintf("rofscmd0=%s", rofsCmd0))
