@@ -130,26 +130,28 @@ func parseOptions(options []string) (*overlitOptions, error) {
 	return opts, nil
 }
 
-func parseRWFSOptions(options map[string]string) (fstype, fsopts string, fssize uint64, rerr error) {
+func parseRWFSOptions(options map[string]string) (fstype, mkfsopts, mntopts string, fssize uint64, rerr error) {
 	for key, val := range options {
 		key = strings.ToLower(key)
 		switch key {
 		case "rwfstype":
 			if val == "_" {
-				return "", "", 0, nil
+				return "", "", "", 0, nil
 			}
 			// Check if read-write filesystem is available
 			if err := checkFSAvailable(val); err != nil {
-				return "", "", 0, err
+				return "", "", "", 0, err
 			}
 			fstype = val
-		case "rwfsopts":
-			fsopts = val
+		case "rwmkfsopts":
+			mkfsopts = val
+		case "rwmntopts":
+			mntopts = val
 		case "rwfssize":
 			size, _ := units.RAMInBytes(val)
 			fssize = uint64(size)
 		default:
-			return "", "", 0, errors.Errorf("not supported option (%s = %s)", key, val)
+			return "", "", "", 0, errors.Errorf("not supported option (%s = %s)", key, val)
 		}
 	}
 
@@ -411,7 +413,7 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 		}
 	}()
 
-	fstype, fsopts, fssize, err := parseRWFSOptions(storageOpt)
+	fstype, mkfsopts, mntopts, fssize, err := parseRWFSOptions(storageOpt)
 	if err != nil {
 		return err
 	} else if fstype == "tmpfs" {
@@ -434,11 +436,11 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 			return errors.New("could not resize device")
 		}
 
-		if err := d.execCommands(fmt.Sprintf("mkfs.%v,%v", fstype, devPath)); err != nil {
+		if err := d.execCommands(fmt.Sprintf("mkfs.%v,%v,%v", fstype, devPath, mkfsopts)); err != nil {
 			return err
 		}
 
-		if err := unix.Mount(devPath, dir, fstype, 0, fsopts); err != nil {
+		if err := unix.Mount(devPath, dir, fstype, 0, mntopts); err != nil {
 			return err
 		}
 
