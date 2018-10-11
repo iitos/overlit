@@ -57,16 +57,20 @@ const (
 var pageSize int = 4096
 
 type overlitOptions struct {
-	DevName    string
-	GroupName  string
-	ExtentSize uint64
-	RofsType   string
-	RofsOpts   string
-	RofsRate   float64
-	RofsSize   uint64
-	RofsCmd0   string
-	RofsCmd1   string
-	PushTar    bool
+	DevName      string
+	GroupName    string
+	ExtentSize   uint64
+	RofsType     string
+	RofsOpts     string
+	RofsRate     float64
+	RofsSize     uint64
+	RofsCmd0     string
+	RofsCmd1     string
+	RwfsType     string
+	RwfsMkfsOpts string
+	RwfsMntOpts  string
+	RwfsSize     uint64
+	PushTar      bool
 }
 
 type overlitDriver struct {
@@ -120,6 +124,15 @@ func parseOptions(options []string) (*overlitOptions, error) {
 			opts.RofsCmd0 = val
 		case "rofscmd1":
 			opts.RofsCmd1 = val
+		case "rwfstype":
+			opts.RwfsType = val
+		case "rwfsmkfsopts":
+			opts.RwfsMkfsOpts = val
+		case "rwfsmntopts":
+			opts.RwfsMntOpts = val
+		case "rwfssize":
+			size, _ := units.RAMInBytes(val)
+			opts.RwfsSize = uint64(size)
 		case "pushtar":
 			opts.PushTar, _ = strconv.ParseBool(val)
 		default:
@@ -130,8 +143,13 @@ func parseOptions(options []string) (*overlitOptions, error) {
 	return opts, nil
 }
 
-func parseRWFSOptions(options map[string]string) (fstype, mkfsopts, mntopts string, fssize uint64, rerr error) {
-	for key, val := range options {
+func parseRWFSOptions(overlitOpts overlitOptions, storageOpts map[string]string) (fstype, mkfsopts, mntopts string, fssize uint64, rerr error) {
+	fstype = overlitOpts.RwfsType
+	mkfsopts = overlitOpts.RwfsMkfsOpts
+	mntopts = overlitOpts.RwfsMntOpts
+	fssize = overlitOpts.RwfsSize
+
+	for key, val := range storageOpts {
 		key = strings.ToLower(key)
 		switch key {
 		case "rwfstype":
@@ -364,8 +382,8 @@ func (d *overlitDriver) Init(home string, options []string, uidMaps, gidMaps []i
 	return nil
 }
 
-func (d *overlitDriver) Create(id, parent, mountLabel string, storageOpt map[string]string) (rerr error) {
-	log.Printf("overlit: create (id = %s, parent = %s, mountLabel = %s, storageOpt = %v)\n", id, parent, mountLabel, storageOpt)
+func (d *overlitDriver) Create(id, parent, mountLabel string, storageOpts map[string]string) (rerr error) {
+	log.Printf("overlit: create (id = %s, parent = %s, mountLabel = %s, storageOpts = %v)\n", id, parent, mountLabel, storageOpts)
 
 	dir := d.getHomePath(id)
 
@@ -394,8 +412,8 @@ func (d *overlitDriver) Create(id, parent, mountLabel string, storageOpt map[str
 	return nil
 }
 
-func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOpt map[string]string) (rerr error) {
-	log.Printf("overlit: createreadwrite (id = %s, parent = %s, mountLabel = %s, storageOpt = %v)\n", id, parent, mountLabel, storageOpt)
+func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOpts map[string]string) (rerr error) {
+	log.Printf("overlit: createreadwrite (id = %s, parent = %s, mountLabel = %s, storageOpts = %v)\n", id, parent, mountLabel, storageOpts)
 
 	dir := d.getHomePath(id)
 
@@ -413,7 +431,7 @@ func (d *overlitDriver) CreateReadWrite(id, parent, mountLabel string, storageOp
 		}
 	}()
 
-	fstype, mkfsopts, mntopts, fssize, err := parseRWFSOptions(storageOpt)
+	fstype, mkfsopts, mntopts, fssize, err := parseRWFSOptions(d.options, storageOpts)
 	if err != nil {
 		return err
 	} else if fstype == "tmpfs" {

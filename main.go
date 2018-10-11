@@ -24,6 +24,10 @@ func main() {
 	var rofsSize string
 	var rofsCmd0 string
 	var rofsCmd1 string
+	var rwfsType string
+	var rwfsMkfsOpts string
+	var rwfsMntOpts string
+	var rwfsSize string
 	var pushTar bool
 
 	flag.StringVar(&devName, "devname", "_", "devmapper device name")
@@ -35,6 +39,10 @@ func main() {
 	flag.StringVar(&rofsSize, "rofssize", "0", "filesystem minimum size for read-only layer")
 	flag.StringVar(&rofsCmd0, "rofscmd0", "mkraonfs.py,-s,{tars},-t,{dev}", "precommands for read-only layer")
 	flag.StringVar(&rofsCmd1, "rofscmd1", "", "postcommands for read-only layer")
+	flag.StringVar(&rwfsType, "rwfstype", "", "filesystem type for read-write layer")
+	flag.StringVar(&rwfsMkfsOpts, "rwfsmkfsopts", "", "filesystem mkfs options for read-write layer")
+	flag.StringVar(&rwfsMntOpts, "rwfsmntopts", "", "filesystem mount options for read-write layer")
+	flag.StringVar(&rwfsSize, "rwfssize", "", "filesystem size for read-write layer")
 	flag.BoolVar(&pushTar, "pushtar", true, "push layer as tarball")
 	flag.Parse()
 
@@ -48,6 +56,10 @@ func main() {
 	options = append(options, fmt.Sprintf("rofssize=%s", rofsSize))
 	options = append(options, fmt.Sprintf("rofscmd0=%s", rofsCmd0))
 	options = append(options, fmt.Sprintf("rofscmd1=%s", rofsCmd1))
+	options = append(options, fmt.Sprintf("rwfstype=%s", rwfsType))
+	options = append(options, fmt.Sprintf("rwfsmkfsopts=%s", rwfsMkfsOpts))
+	options = append(options, fmt.Sprintf("rwfsmntopts=%s", rwfsMntOpts))
+	options = append(options, fmt.Sprintf("rwfssize=%s", rwfsSize))
 	options = append(options, fmt.Sprintf("pushtar=%t", pushTar))
 
 	d, err := NewOverlitDriver(options)
