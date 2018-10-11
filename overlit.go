@@ -161,9 +161,9 @@ func parseRWFSOptions(overlitOpts overlitOptions, storageOpts map[string]string)
 				return "", "", "", 0, err
 			}
 			fstype = val
-		case "rwmkfsopts":
+		case "rwfsmkfsopts":
 			mkfsopts = val
-		case "rwmntopts":
+		case "rwfsmntopts":
 			mntopts = val
 		case "rwfssize":
 			size, _ := units.RAMInBytes(val)
